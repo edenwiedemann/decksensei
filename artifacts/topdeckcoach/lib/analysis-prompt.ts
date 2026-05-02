@@ -69,6 +69,11 @@ function toCache(key: string, value: unknown): void {
   _cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
+function cacheHas(key: string): boolean {
+  const entry = _cache.get(key);
+  return !!(entry && Date.now() < entry.expiresAt);
+}
+
 // ─── Tipos de schema do DB ────────────────────────────────────────────────────
 
 type GameRow = typeof gamesTable.$inferSelect;
@@ -118,7 +123,7 @@ async function getActivePrompt(gameId: string): Promise<PromptRow> {
   return rows[0];
 }
 
-async function getActiveMetaSnapshot(gameId: string): Promise<SnapshotRow> {
+async function getActiveGlobalSnapshot(gameId: string): Promise<SnapshotRow> {
   const key = `snapshot:active:global:${gameId}`;
   const cached = fromCache<SnapshotRow>(key);
   if (cached) return cached;
@@ -143,6 +148,34 @@ async function getActiveMetaSnapshot(gameId: string): Promise<SnapshotRow> {
 
   toCache(key, rows[0]);
   return rows[0];
+}
+
+/**
+ * Busca a snapshot local ativa (ex: meta Recife).
+ * Retorna null sem lançar erro caso não exista — a análise continua só com o meta global.
+ */
+async function getActiveLocalSnapshot(
+  gameId: string,
+): Promise<SnapshotRow | null> {
+  const key = `snapshot:active:local:${gameId}`;
+  // Usa cacheHas para distinguir "cache miss" de "cached null"
+  if (cacheHas(key)) return fromCache<SnapshotRow | null>(key);
+
+  const rows = await db
+    .select()
+    .from(metaSnapshotsTable)
+    .where(
+      and(
+        eq(metaSnapshotsTable.gameId, gameId),
+        eq(metaSnapshotsTable.scope, "local"),
+        eq(metaSnapshotsTable.active, true),
+      ),
+    )
+    .limit(1);
+
+  const result = rows[0] ?? null;
+  toCache(key, result);
+  return result;
 }
 
 // ─── Tipos do JSON da snapshot ────────────────────────────────────────────────
@@ -215,30 +248,18 @@ function formatDeckRules(rules: GameConfigForPrompt["deck_rules"]): string {
 }
 
 /**
- * Formata os arquetipos da snapshot como texto estruturado (não JSON cru)
- * para substituição do placeholder {{archetypes_context}}.
- * Inclui: nome, plano de jogo, key cards, matchups bons/ruins, decklist exemplar.
+ * Deriva o rótulo legível para um bloco de meta local a partir da versão da snapshot.
+ * "recife-v1" → "META LOCAL (RECIFE)" | "sao-paulo-v2" → "META LOCAL (SAO PAULO)"
  */
-function formatArchetypesContext(content: MetaSnapshotContent): string {
+function deriveLocalLabel(version: string): string {
+  const parts = version.split("-").filter((p) => !/^v\d+$/i.test(p));
+  const location = parts.map((p) => p.toUpperCase()).join(" ");
+  return location ? `META LOCAL (${location})` : "META LOCAL";
+}
+
+/** Renderiza a lista de arquetipos em linhas de texto estruturado. */
+function renderArchetypeList(archetypes: MetaArchetype[]): string[] {
   const lines: string[] = [];
-
-  if (content.format) {
-    lines.push(`Formato vigente: ${content.format}`);
-  }
-  if (content.snapshot?.fetched_at) {
-    lines.push(`Dados de: ${content.snapshot.fetched_at}`);
-  }
-  if (content.snapshot?.notes_pt) {
-    lines.push(`Nota: ${content.snapshot.notes_pt}`);
-  }
-  lines.push("");
-  lines.push("═══════════════════════════════════════");
-  lines.push("   ARQUETIPOS DO META ATUAL");
-  lines.push("═══════════════════════════════════════");
-  lines.push("");
-
-  const archetypes = content.archetypes ?? [];
-
   for (const arch of archetypes) {
     lines.push(`=== ${arch.name_pt} ===`);
     lines.push(
@@ -293,6 +314,54 @@ function formatArchetypesContext(content: MetaSnapshotContent): string {
     lines.push("");
     lines.push("──────────────────────────────────────────────────────────────");
     lines.push("");
+  }
+  return lines;
+}
+
+/**
+ * Formata os arquetipos como texto estruturado para o placeholder {{archetypes_context}}.
+ *
+ * Seção 1 — META GLOBAL (sempre presente).
+ * Seção 2 — META LOCAL (opcional; só renderiza se `localSnapshot` existe e tem arquetipos).
+ */
+function formatArchetypesContext(
+  globalContent: MetaSnapshotContent,
+  localSnapshot?: SnapshotRow | null,
+): string {
+  const lines: string[] = [];
+
+  if (globalContent.format) {
+    lines.push(`Formato vigente: ${globalContent.format}`);
+  }
+  if (globalContent.snapshot?.fetched_at) {
+    lines.push(`Dados de: ${globalContent.snapshot.fetched_at}`);
+  }
+  if (globalContent.snapshot?.notes_pt) {
+    lines.push(`Nota: ${globalContent.snapshot.notes_pt}`);
+  }
+  lines.push("");
+  lines.push("═══════════════════════════════════════");
+  lines.push("   META GLOBAL");
+  lines.push("═══════════════════════════════════════");
+  lines.push("");
+  lines.push(...renderArchetypeList(globalContent.archetypes ?? []));
+
+  // Bloco local — só renderiza se a snapshot local tiver arquetipos preenchidos
+  if (localSnapshot) {
+    const localContent = localSnapshot.jsonContent as MetaSnapshotContent;
+    const localArchetypes = localContent.archetypes ?? [];
+    if (localArchetypes.length > 0) {
+      const label = deriveLocalLabel(localSnapshot.version);
+      lines.push("═══════════════════════════════════════");
+      lines.push(`   ${label}`);
+      lines.push("═══════════════════════════════════════");
+      lines.push("");
+      if (localContent.snapshot?.notes_pt) {
+        lines.push(`Nota: ${localContent.snapshot.notes_pt}`);
+        lines.push("");
+      }
+      lines.push(...renderArchetypeList(localArchetypes));
+    }
   }
 
   return lines.join("\n");
@@ -405,11 +474,12 @@ function formatUserMessage(
 
 /**
  * Constrói todo o contexto de prompt para o Claude:
- * - Carrega game, prompt ativo e snapshot global ativa do DB (cache 60 s).
+ * - Carrega game, prompt ativo, snapshot global e snapshot local (opcional) do DB (cache 60 s).
  * - Substitui {{placeholders}} no system template.
  * - Monta a mensagem do usuário com deck estruturado + cartas enriquecidas.
  *
- * Lança `PromptBuildError` (com statusHint) se algum recurso não for encontrado.
+ * Lança `PromptBuildError` (com statusHint) se o game ou a snapshot global não existirem.
+ * A ausência de snapshot local não é erro — a análise continua só com o meta global.
  *
  * @returns Objeto pronto para passar ao Anthropic SDK:
  *   `{ system, messages, promptVersionId, metaSnapshotId }`
@@ -423,11 +493,13 @@ export async function buildAnalysisPrompt({
   deck: ParsedDeck;
   enrichedCards: EnrichedCard[];
 }): Promise<BuiltPrompt> {
-  // Carrega todos os recursos em paralelo (todos cacheados após 1ª chamada)
-  const [game, prompt, snapshot] = await Promise.all([
+  // Carrega todos os recursos em paralelo (cacheados 60 s após 1ª chamada)
+  // A snapshot local pode retornar null sem lançar erro
+  const [game, prompt, globalSnapshot, localSnapshot] = await Promise.all([
     getGame(gameId),
     getActivePrompt(gameId),
-    getActiveMetaSnapshot(gameId),
+    getActiveGlobalSnapshot(gameId),
+    getActiveLocalSnapshot(gameId),
   ]);
 
   const gameConfig =
@@ -435,11 +507,11 @@ export async function buildAnalysisPrompt({
       ? (JSON.parse(game.config) as GameConfigForPrompt)
       : (game.config as GameConfigForPrompt);
 
-  const snapshotContent = snapshot.jsonContent as MetaSnapshotContent;
+  const globalContent = globalSnapshot.jsonContent as MetaSnapshotContent;
 
   // Formata os blocos que substituem os placeholders
   const deckRulesText = formatDeckRules(gameConfig.deck_rules);
-  const archetypesText = formatArchetypesContext(snapshotContent);
+  const archetypesText = formatArchetypesContext(globalContent, localSnapshot);
   const cardCodeExamples = (gameConfig.card_code_examples ?? []).join(", ");
 
   // Substitui todos os {{placeholders}} no template do system
@@ -456,6 +528,6 @@ export async function buildAnalysisPrompt({
     system,
     messages: [{ role: "user", content: userMessage }],
     promptVersionId: prompt.id,
-    metaSnapshotId: snapshot.id,
+    metaSnapshotId: globalSnapshot.id,
   };
 }
