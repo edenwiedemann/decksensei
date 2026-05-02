@@ -11,6 +11,8 @@
 
 import { type NextRequest } from "next/server";
 import { cookies } from "next/headers";
+import crypto from "crypto";
+import { adminSessionValue } from "@/lib/auth/admin";
 import Anthropic, {
   APIConnectionError,
   APIConnectionTimeoutError,
@@ -113,55 +115,72 @@ function deckToText(deck: ParsedDeck): string {
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
-  const isAuthenticated = !!cookieStore.get("session_token")?.value;
+
+  // ── Admin bypass — pula rate limit e auth gate ────────────────────────────
+  const adminCookie = cookieStore.get("admin_session")?.value ?? "";
+  let isAdmin = false;
+  if (adminCookie) {
+    try {
+      const expected = adminSessionValue();
+      isAdmin =
+        adminCookie.length === expected.length &&
+        crypto.timingSafeEqual(
+          Buffer.from(adminCookie, "hex"),
+          Buffer.from(expected, "hex"),
+        );
+    } catch {
+      isAdmin = false;
+    }
+  }
+
+  const isAuthenticated = isAdmin || !!cookieStore.get("session_token")?.value;
 
   // ── 0. Rate limiting ──────────────────────────────────────────────────────
-  const ip = getClientIp(request);
-  const rateLimitKey = isAuthenticated ? `auth:${ip}` : `anon:${ip}`;
-  const maxRequests = isAuthenticated ? LIMIT_AUTH : LIMIT_ANON;
-
-  let rlResult: Awaited<ReturnType<typeof checkRateLimit>>;
-  try {
-    rlResult = await checkRateLimit(rateLimitKey, WINDOW_SEC, maxRequests);
-  } catch (err) {
-    // Se o check falhar (DB down, etc.) deixa passar — não bloqueia o usuário
-    console.error("[analyze] rate limit check falhou:", err);
-    rlResult = { allowed: true };
-  }
-
-  if (!rlResult.allowed) {
-    const retryAfterSec = rlResult.retryAfterSec;
-    return Response.json(
-      {
-        error: "rate_limit",
-        message_pt: `Limite de análises atingido — tente novamente em ${formatMinutes(retryAfterSec)}.`,
-        retryAfterSec,
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfterSec),
-        },
-      },
-    );
-  }
-
-  // ── 1. Auth gate ──────────────────────────────────────────────────────────
   let shouldSetCountCookie = false;
 
-  if (!isAuthenticated) {
-    const count = parseInt(cookieStore.get("analyses_count")?.value ?? "0", 10);
-    if (count >= 1) {
+  if (!isAdmin) {
+    const ip = getClientIp(request);
+    const rateLimitKey = isAuthenticated ? `auth:${ip}` : `anon:${ip}`;
+    const maxRequests = isAuthenticated ? LIMIT_AUTH : LIMIT_ANON;
+
+    let rlResult: Awaited<ReturnType<typeof checkRateLimit>>;
+    try {
+      rlResult = await checkRateLimit(rateLimitKey, WINDOW_SEC, maxRequests);
+    } catch (err) {
+      console.error("[analyze] rate limit check falhou:", err);
+      rlResult = { allowed: true };
+    }
+
+    if (!rlResult.allowed) {
+      const retryAfterSec = rlResult.retryAfterSec;
       return Response.json(
         {
-          error: "auth_required",
-          message_pt:
-            "Faz o cadastro com seu email pra continuar — leva 30 segundos.",
+          error: "rate_limit",
+          message_pt: `Limite de análises atingido — tente novamente em ${formatMinutes(retryAfterSec)}.`,
+          retryAfterSec,
         },
-        { status: 401 },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSec) },
+        },
       );
     }
-    shouldSetCountCookie = true;
+
+    // ── 1. Auth gate ────────────────────────────────────────────────────────
+    if (!isAuthenticated) {
+      const count = parseInt(cookieStore.get("analyses_count")?.value ?? "0", 10);
+      if (count >= 1) {
+        return Response.json(
+          {
+            error: "auth_required",
+            message_pt:
+              "Faz o cadastro com seu email pra continuar — leva 30 segundos.",
+          },
+          { status: 401 },
+        );
+      }
+      shouldSetCountCookie = true;
+    }
   }
 
   // ── 2. Parse e valida o body ────────────────────────────────────────────

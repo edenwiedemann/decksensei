@@ -9,7 +9,6 @@ interface MarkFeaturedFormProps {
   analysisId: string;
   currentPlayerName: string;
   isFeatured: boolean;
-  token: string;
 }
 
 export default function MarkFeaturedForm({
@@ -17,7 +16,6 @@ export default function MarkFeaturedForm({
   analysisId,
   currentPlayerName,
   isFeatured,
-  token,
 }: MarkFeaturedFormProps) {
   const [playerName, setPlayerName] = useState(currentPlayerName);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -31,10 +29,7 @@ export default function MarkFeaturedForm({
     try {
       const res = await fetch("/api/admin/featured/set", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Admin-Token": token,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gameId, analysisId, playerName: playerName.trim() }),
       });
 

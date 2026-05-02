@@ -1,28 +1,10 @@
-import { NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/auth/admin";
 import { db, analysesTable, eq, and, isNull } from "@workspace/db";
 
-function adminToken(): string | null {
-  return process.env.ADMIN_TOKEN ?? null;
-}
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = adminToken();
-  if (!token) return false;
-  const header = req.headers.get("x-admin-token");
-  return header === token;
-}
-
 export async function POST(req: NextRequest) {
-  if (!adminToken()) {
-    return Response.json(
-      { error: "ADMIN_TOKEN não configurado no servidor." },
-      { status: 503 },
-    );
-  }
-
-  if (!isAuthorized(req)) {
-    return Response.json({ error: "Não autorizado." }, { status: 401 });
-  }
+  const auth = requireAdmin(req);
+  if (auth instanceof Response) return auth;
 
   let body: unknown;
   try {
