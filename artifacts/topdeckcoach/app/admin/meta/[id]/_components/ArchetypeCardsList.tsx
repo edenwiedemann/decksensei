@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { MetaArchetype } from "@/lib/analysis-prompt";
 
+// Display sort order — does NOT affect DB indices
+const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
+
 const TIER_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   S: { bg: "bg-amber-500/20",  text: "text-amber-400",  border: "border-amber-500/40" },
   A: { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/40" },
@@ -24,39 +27,58 @@ const COLOR_DOTS: Record<string, string> = {
 
 interface Props {
   snapshotId: number;
-  archetypes: MetaArchetype[];
+  archetypes: MetaArchetype[]; // original DB order — must NOT be pre-sorted
 }
 
 export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: Props) {
   const router = useRouter();
-  const [archetypes, setArchetypes] = useState(initial);
-  const [deletingIdx, setDeletingIdx] = useState<number | null>(null);
-  const [addingNew, setAddingNew] = useState(false);
+  const [archetypes, setArchetypes]     = useState(initial);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [addingNew, setAddingNew]       = useState(false);
 
-  const handleDelete = async (displayIdx: number) => {
-    // displayIdx is position in the displayed (sorted) list, but we need to
-    // find the actual index in the original archetypes array by matching the archetype id
-    const arch = archetypes[displayIdx];
+  // Sorted copy for display only — original array keeps DB indices
+  const displayed = [...archetypes].sort(
+    (a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9),
+  );
+
+  const handleDelete = async (arch: MetaArchetype) => {
     if (!confirm(`Excluir arquetipo "${arch.name_pt || arch.name}"? Esta ação não pode ser desfeita.`)) return;
 
-    // Find real index in original order matching id
-    // Since we sorted for display, we need to find the actual DB index
-    // Let's re-fetch original order from the page data - actually we need to pass original order
-    // For simplicity, delete by finding the archetype in original order
+    // Index in original (unsorted) array = correct DB index
     const realIdx = initial.findIndex((a) => a.id === arch.id);
     if (realIdx === -1) return;
 
-    setDeletingIdx(displayIdx);
+    setDeletingId(arch.id);
     try {
       const res = await fetch(`/api/admin/meta/snapshots/${snapshotId}/archetypes/${realIdx}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        setArchetypes((prev) => prev.filter((_, i) => i !== displayIdx));
+        setArchetypes((prev) => prev.filter((a) => a.id !== arch.id));
         router.refresh();
       }
     } finally {
-      setDeletingIdx(null);
+      setDeletingId(null);
+    }
+  };
+
+  const handleDuplicate = async (arch: MetaArchetype) => {
+    const realIdx = initial.findIndex((a) => a.id === arch.id);
+    if (realIdx === -1) return;
+
+    setDuplicatingId(arch.id);
+    try {
+      const res = await fetch(
+        `/api/admin/meta/snapshots/${snapshotId}/archetypes/${realIdx}/duplicate`,
+        { method: "POST" },
+      );
+      const data = (await res.json()) as { ok?: boolean; archIdx?: number };
+      if (res.ok && data.ok && data.archIdx !== undefined) {
+        router.push(`/admin/meta/${snapshotId}/archetype/${data.archIdx}/edit`);
+      }
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -67,7 +89,7 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
         method: "POST",
       });
       const data = (await res.json()) as { ok?: boolean; archIdx?: number };
-      if (res.ok && data.ok) {
+      if (res.ok && data.ok && data.archIdx !== undefined) {
         router.push(`/admin/meta/${snapshotId}/archetype/${data.archIdx}/edit`);
       }
     } finally {
@@ -94,14 +116,17 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
         <div className="rounded-xl border border-border/40 bg-card/40 px-8 py-12 text-center">
           <p className="text-sm text-muted-foreground">
             Nenhum arquetipo ainda.{" "}
-            <button onClick={handleAddNew} className="text-primary hover:underline">Adicionar primeiro →</button>
+            <button onClick={handleAddNew} className="text-primary hover:underline">
+              Adicionar primeiro →
+            </button>
           </p>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {archetypes.map((arch, displayIdx) => {
+        {displayed.map((arch) => {
           const tierStyle = TIER_COLORS[arch.tier] ?? TIER_COLORS.C;
+          // realIdx = index in original unsorted array = correct DB position
           const realIdx = initial.findIndex((a) => a.id === arch.id);
 
           return (
@@ -109,14 +134,13 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
               key={arch.id}
               className="group relative flex flex-col gap-3 rounded-xl border border-border/50 bg-card/50 p-5 transition-all hover:border-border/80 hover:bg-card/70"
             >
-              {/* Tier badge */}
+              {/* Tier badge + colors */}
               <div className="flex items-start justify-between gap-2">
                 <span
                   className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-bold ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border}`}
                 >
                   {arch.tier}
                 </span>
-                {/* Colors */}
                 <div className="flex items-center gap-1">
                   {(arch.colors ?? []).map((c) => (
                     <div
@@ -175,11 +199,20 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
                   Editar
                 </Link>
                 <button
-                  onClick={() => handleDelete(displayIdx)}
-                  disabled={deletingIdx === displayIdx}
+                  onClick={() => handleDuplicate(arch)}
+                  disabled={duplicatingId === arch.id}
+                  title="Duplicar arquetipo"
+                  className="rounded-md border border-border/40 px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-all hover:border-border/70 hover:text-foreground disabled:opacity-40"
+                >
+                  {duplicatingId === arch.id ? "…" : "⧉"}
+                </button>
+                <button
+                  onClick={() => handleDelete(arch)}
+                  disabled={deletingId === arch.id}
+                  title="Excluir arquetipo"
                   className="rounded-md border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400/60 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-40"
                 >
-                  {deletingIdx === displayIdx ? "…" : "✕"}
+                  {deletingId === arch.id ? "…" : "✕"}
                 </button>
               </div>
             </div>

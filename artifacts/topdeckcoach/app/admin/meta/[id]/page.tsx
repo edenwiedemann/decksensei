@@ -28,8 +28,6 @@ async function getSnapshot(id: number): Promise<SnapRow | null> {
   return r.rows[0] ?? null;
 }
 
-const TIER_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
-
 export default async function SnapshotDetailPage({
   params,
 }: {
@@ -44,9 +42,8 @@ export default async function SnapshotDetailPage({
   const snap = await getSnapshot(numericId);
   if (!snap) notFound();
 
-  const archetypes: MetaArchetype[] = (snap.json_content?.archetypes ?? []).slice().sort(
-    (a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9),
-  );
+  // Pass original DB order — ArchetypeCardsList sorts for display internally
+  const archetypes: MetaArchetype[] = snap.json_content?.archetypes ?? [];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">

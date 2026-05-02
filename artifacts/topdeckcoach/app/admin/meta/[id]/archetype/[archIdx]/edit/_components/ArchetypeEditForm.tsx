@@ -38,15 +38,20 @@ const COLORS = [
 ];
 
 const PLAY_STYLES = [
-  { id: "aggro",           label: "Aggro" },
-  { id: "midrange",        label: "Midrange" },
-  { id: "control",         label: "Control" },
-  { id: "combo",           label: "Combo" },
-  { id: "toolbox",         label: "Toolbox" },
-  { id: "midrange-toolbox",label: "Midrange-Toolbox" },
-  { id: "aggro-combo",     label: "Aggro-Combo" },
-  { id: "tempo",           label: "Tempo" },
-  { id: "burn",            label: "Burn" },
+  { id: "aggro",            label: "Aggro" },
+  { id: "midrange",         label: "Midrange" },
+  { id: "control",          label: "Control" },
+  { id: "combo",            label: "Combo" },
+  { id: "toolbox",          label: "Toolbox" },
+  { id: "tempo",            label: "Tempo" },
+  { id: "burn",             label: "Burn" },
+  { id: "aggro-combo",      label: "Aggro-Combo" },
+  { id: "combo-aggro",      label: "Combo-Aggro" },
+  { id: "combo-control",    label: "Combo-Control" },
+  { id: "control-midrange", label: "Control-Midrange" },
+  { id: "midrange-aggro",   label: "Midrange-Aggro" },
+  { id: "midrange-combo",   label: "Midrange-Combo" },
+  { id: "midrange-toolbox", label: "Midrange-Toolbox" },
 ];
 
 const KEY_CARD_ROLES = [
@@ -209,12 +214,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // ─── Uid helpers ─────────────────────────────────────────────────────────────
 
-let _uid = 0;
-const uid = () => `uid-${++_uid}`;
-
+// Index-based uid for initial state — deterministic on server & client (no hydration mismatch).
+// For items added at runtime (already client-side), uses timestamp + random suffix.
 function withUid<T extends object>(arr: T[]): (T & { uid: string })[] {
-  return arr.map((x) => ({ ...x, uid: uid() }));
+  return arr.map((x, i) => ({ ...x, uid: `uid-${i}` }));
 }
+
+const uid = () => `uid-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 // ─── Main form ────────────────────────────────────────────────────────────────
 
