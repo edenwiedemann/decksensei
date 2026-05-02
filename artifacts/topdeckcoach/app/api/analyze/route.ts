@@ -10,7 +10,13 @@
  */
 
 import { type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  RateLimitError,
+  AuthenticationError,
+  APIError,
+} from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
 import { db, analysesTable, apiCostsTable } from "@workspace/db";
 import {
