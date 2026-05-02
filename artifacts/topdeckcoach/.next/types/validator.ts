@@ -128,6 +128,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/api/auth/request-magic-link/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/auth/request-magic-link">> = Specific
+  const handler = {} as typeof import("../../app/api/auth/request-magic-link/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/pages/not-found.tsx
 {
   type __IsExpected<Specific extends PagesPageConfig> = Specific
