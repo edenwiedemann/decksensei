@@ -1,0 +1,228 @@
+import Link from "next/link";
+import { pool } from "@workspace/db";
+import { getDailyCost } from "@/lib/cost-tracker";
+import GameSelector from "./_components/GameSelector";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+// ─── Queries ─────────────────────────────────────────────────────────────────
+
+async function getTotalUsers(): Promise<number> {
+  const r = await pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM users");
+  return parseInt(r.rows[0]?.count ?? "0", 10);
+}
+
+async function getAnalysesToday(): Promise<number> {
+  const r = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM analyses
+     WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE
+       AND deleted_at IS NULL`,
+  );
+  return parseInt(r.rows[0]?.count ?? "0", 10);
+}
+
+async function getPositiveFeedbackPct(): Promise<number | null> {
+  const r = await pool.query<{ pct: string | null }>(
+    `SELECT ROUND(
+       COUNT(*) FILTER (WHERE rating = 'up') * 100.0
+       / NULLIF(COUNT(*), 0),
+     1)::text AS pct
+     FROM analysis_feedback
+     WHERE created_at >= NOW() - INTERVAL '7 days'`,
+  );
+  const raw = r.rows[0]?.pct;
+  return raw != null ? parseFloat(raw) : null;
+}
+
+// ─── Nav links ────────────────────────────────────────────────────────────────
+
+const NAV_LINKS = [
+  { href: "/admin/analyses",   label: "Análises",      desc: "Histórico e moderação de análises",       icon: "🗂" },
+  { href: "/admin/users",      label: "Usuários",      desc: "Cadastros, magic links e sessões",         icon: "👤" },
+  { href: "/admin/feedback",   label: "Feedback",      desc: "Avaliações up/down das análises",          icon: "⭐" },
+  { href: "/admin/prompts",    label: "Prompts",       desc: "Versões de prompt por jogo",               icon: "✏️" },
+  { href: "/admin/meta",       label: "Meta global",   desc: "Snapshots e arquetipos do meta",           icon: "🌐" },
+  { href: "/admin/meta-recife",label: "Meta Recife",   desc: "Ajustes locais do meta de Recife",         icon: "🦀" },
+];
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export default async function AdminDashboardPage() {
+  const [totalUsers, analysesToday, feedbackPct, dailyCostUsd] =
+    await Promise.all([
+      getTotalUsers().catch(() => null),
+      getAnalysesToday().catch(() => null),
+      getPositiveFeedbackPct().catch(() => null),
+      getDailyCost().catch(() => null),
+    ]);
+
+  const capUsd = parseFloat(process.env.DAILY_COST_CAP_USD ?? "10");
+  const costPct =
+    dailyCostUsd != null ? Math.min(100, (dailyCostUsd / capUsd) * 100) : 0;
+
+  const costColor =
+    costPct >= 90
+      ? "bg-red-500"
+      : costPct >= 65
+        ? "bg-amber-400"
+        : "bg-primary";
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between border-b border-border/40 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← App
+          </Link>
+          <span className="text-border/60">·</span>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">
+            TopdeckCoach Admin
+          </h1>
+        </div>
+        <GameSelector />
+      </header>
+
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        {/* ── Stat cards 2×2 ──────────────────────────────────────────── */}
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Usuários totais */}
+          <StatCard title="Usuários totais" icon="👤">
+            <BigNumber value={totalUsers} />
+            <p className="mt-1 text-xs text-muted-foreground">cadastrados na plataforma</p>
+          </StatCard>
+
+          {/* Análises hoje */}
+          <StatCard title="Análises hoje" icon="🗂">
+            <BigNumber value={analysesToday} />
+            <p className="mt-1 text-xs text-muted-foreground">desde meia-noite UTC</p>
+          </StatCard>
+
+          {/* % feedback positivo 7d */}
+          <StatCard title="Feedback positivo (7 dias)" icon="⭐">
+            <BigNumber
+              value={feedbackPct != null ? `${feedbackPct}%` : null}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {feedbackPct != null
+                ? "avaliações 👍 nos últimos 7 dias"
+                : "sem dados de feedback ainda"}
+            </p>
+          </StatCard>
+
+          {/* Custo diário */}
+          <StatCard title="Custo USD — hoje" icon="💲">
+            <BigNumber
+              value={
+                dailyCostUsd != null
+                  ? `$${dailyCostUsd.toFixed(4)}`
+                  : null
+              }
+            />
+            <div className="mt-3 flex flex-col gap-1.5">
+              {/* Barra de progresso */}
+              <div className="h-2 w-full overflow-hidden rounded-full bg-border/30">
+                <div
+                  className={`h-full rounded-full transition-all ${costColor}`}
+                  style={{ width: `${costPct}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                cap diário:{" "}
+                <span className="font-medium text-foreground">${capUsd}</span>
+                {dailyCostUsd != null && (
+                  <>
+                    {" "}·{" "}
+                    <span
+                      className={
+                        costPct >= 90
+                          ? "text-red-400"
+                          : costPct >= 65
+                            ? "text-amber-400"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {costPct.toFixed(1)}% usado
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          </StatCard>
+        </div>
+
+        {/* ── Navegação ────────────────────────────────────────────────── */}
+        <div>
+          <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
+            Painéis
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="group flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 px-5 py-4 transition-all hover:border-primary/40 hover:bg-card/70"
+              >
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">
+                  {link.icon}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                    {link.label}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                    {link.desc}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
+
+function StatCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/50 px-6 py-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-base">{icon}</span>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+          {title}
+        </p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BigNumber({ value }: { value: string | number | null | undefined }) {
+  if (value == null) {
+    return (
+      <p className="text-3xl font-bold tabular-nums text-muted-foreground/40">
+        —
+      </p>
+    );
+  }
+  return (
+    <p className="text-3xl font-bold tabular-nums tracking-tight text-foreground">
+      {value}
+    </p>
+  );
+}
