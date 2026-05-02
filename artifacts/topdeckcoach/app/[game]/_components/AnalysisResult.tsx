@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
+import FeedbackBlock from "./FeedbackBlock";
 
 // ─── Configuração das seções ──────────────────────────────────────────────────
 
@@ -399,9 +400,10 @@ interface AnalysisResultProps {
   text: string;
   streaming: boolean;
   colorMap: Record<string, string>;
+  analysisId?: string;
 }
 
-export default function AnalysisResult({ text, streaming, colorMap }: AnalysisResultProps) {
+export default function AnalysisResult({ text, streaming, colorMap, analysisId }: AnalysisResultProps) {
   const sections = parseSections(text);
   if (sections.length === 0) return null;
 
@@ -416,6 +418,10 @@ export default function AnalysisResult({ text, streaming, colorMap }: AnalysisRe
           colorMap={colorMap}
         />
       ))}
+
+      {!streaming && analysisId && (
+        <FeedbackBlock analysisId={analysisId} />
+      )}
     </div>
   );
 }

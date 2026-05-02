@@ -59,7 +59,12 @@ export default function AnalysisStream({
 
       {/* Cards de seção — aparecem progressivamente durante o stream */}
       {hasText && (
-        <AnalysisResult text={text} streaming={streaming} colorMap={colorMap} />
+        <AnalysisResult
+          text={text}
+          streaming={streaming}
+          colorMap={colorMap}
+          analysisId={analysisId || undefined}
+        />
       )}
 
       {/* Ações pós-análise */}
