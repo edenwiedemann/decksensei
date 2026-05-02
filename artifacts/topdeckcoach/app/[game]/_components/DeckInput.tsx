@@ -50,6 +50,8 @@ interface AnalysisState {
   validationErrors: string[];
   /** Mapa nome_pt → cor primária do arquetipo, vindo do header X-Meta-Color-Map. */
   colorMap: Record<string, string>;
+  /** ID da análise salva no DB (nanoid 24), vindo do header X-Analysis-Id. */
+  analysisId: string;
 }
 
 const IDLE: AnalysisState = {
@@ -58,6 +60,7 @@ const IDLE: AnalysisState = {
   error: "",
   validationErrors: [],
   colorMap: {},
+  analysisId: "",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -222,7 +225,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         return;
       }
 
-      // ── Captura colorMap do header antes de ler o stream ─────────────
+      // ── Captura headers antes de ler o stream ────────────────────────
       let colorMap: Record<string, string> = {};
       try {
         const raw = res.headers.get("X-Meta-Color-Map");
@@ -230,6 +233,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
       } catch {
         // header ausente ou malformado — análise continua sem cores de arquetipo
       }
+      const analysisId = res.headers.get("X-Analysis-Id") ?? "";
 
       // ── Leitura do stream ─────────────────────────────────────────────
       const reader = res.body.getReader();
@@ -244,10 +248,10 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           return;
         }
         fullText += decoder.decode(value, { stream: true });
-        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [], colorMap });
+        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [], colorMap, analysisId });
       }
 
-      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [], colorMap });
+      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [], colorMap, analysisId });
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       // Layer 1: erro de stream (conexão caiu durante a leitura)
@@ -420,6 +424,8 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
             text={analysis.text}
             streaming={phase === "streaming"}
             colorMap={analysis.colorMap}
+            analysisId={analysis.analysisId}
+            gameId={gameConfig.id}
             onReset={handleReset}
           />
         </div>
