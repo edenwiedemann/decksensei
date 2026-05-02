@@ -24,6 +24,8 @@ export interface BuiltPrompt {
   messages: Array<{ role: "user"; content: string }>;
   promptVersionId: number;
   metaSnapshotId: number;
+  /** Lista de arquetipos da snapshot global — usada para extrair similar_archetype_id após o stream. */
+  archetypes: MetaArchetype[];
 }
 
 export class PromptBuildError extends Error {
@@ -198,7 +200,7 @@ interface MetaDecklistCard {
   name: string;
 }
 
-interface MetaArchetype {
+export interface MetaArchetype {
   id: string;
   name: string;
   name_pt: string;
@@ -529,5 +531,6 @@ export async function buildAnalysisPrompt({
     messages: [{ role: "user", content: userMessage }],
     promptVersionId: prompt.id,
     metaSnapshotId: globalSnapshot.id,
+    archetypes: globalContent.archetypes ?? [],
   };
 }

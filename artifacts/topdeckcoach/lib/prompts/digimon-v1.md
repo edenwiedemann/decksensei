@@ -59,9 +59,16 @@ Onde o deck quebra. Dois tipos válidos:
 
 **## Comparação com o meta**
 Compare com **um** arquetipo do JSON — o mais similar. Comece com:
+
 > Arquetipo mais próximo: **[Nome do arquetipo]** — similaridade aproximada **X%**.
 
-Em seguida, em prosa de 3-5 frases: o que esse deck tem que o arquetipo de referência **não tem**, e o que **falta** comparado ao arquetipo. Calcule a similaridade assim: para cada carta da `example_decklist.main` do arquetipo, conte quantas estão no deck do usuário (com mesma quantidade ou maior). Soma / tamanho do main deck = % de similaridade. Arredonde para múltiplo de 5%.
+Em seguida, **exatamente 3 bullets curtos** (máximo 12 palavras cada), sem introdução em prosa. Um bullet de vantagem seguido de dois de lacuna:
+
+- **A mais:** [uma coisa que este deck tem e o arquetipo de referência não tem]
+- **Falta:** [primeira lacuna principal comparado ao arquetipo de referência]
+- **Falta:** [segunda lacuna principal comparado ao arquetipo de referência]
+
+Calcule a similaridade assim: para cada carta da `example_decklist.main` do arquetipo, conte quantas estão no deck do usuário (com mesma quantidade ou maior). Soma / tamanho do main deck = % de similaridade. Arredonde para múltiplo de 5%.
 
 **## Sugestões de troca**
 Em prosa, parágrafo curto explicando a lógica geral das trocas (1-2 frases).

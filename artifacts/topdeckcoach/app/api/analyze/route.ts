@@ -22,6 +22,7 @@ import { db, analysesTable, apiCostsTable } from "@workspace/db";
 import {
   buildAnalysisPrompt,
   PromptBuildError,
+  type MetaArchetype,
 } from "@/lib/analysis-prompt";
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
 
@@ -71,6 +72,22 @@ function logAnthropicError(analysisId: string, err: unknown): void {
   } else {
     console.error(`[analyze][${analysisId}] erro inesperado:`, err);
   }
+}
+
+/**
+ * Extrai o ID do arquetipo mais próximo do texto da análise.
+ * Procura o padrão gerado pelo Claude: `Arquetipo mais próximo: **[Nome]** — similaridade aproximada **X%**.`
+ */
+function extractSimilarArchetype(
+  text: string,
+  archetypes: MetaArchetype[],
+): string | null {
+  const match = text.match(
+    /Arquetipo mais pr[oó]ximo:\s*\*\*([^*]+)\*\*\s*[—–\-]\s*similaridade aproximada\s*\*\*(\d+)%/,
+  );
+  if (!match) return null;
+  const name = match[1].trim();
+  return archetypes.find((a) => a.name === name || a.name_pt === name)?.id ?? null;
 }
 
 /** Reconstrói texto legível da decklist a partir do ParsedDeck para armazenar. */
@@ -149,6 +166,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── 2b. Mapa de cores dos arquetipos para o frontend ────────────────────────
+  const colorMap: Record<string, string> = {};
+  for (const arch of built.archetypes) {
+    if (arch.colors[0]) colorMap[arch.name_pt] = arch.colors[0];
+  }
+  const colorMapHeader = encodeURIComponent(JSON.stringify(colorMap));
+
   // ── 3. Streaming via Anthropic SDK ──────────────────────────────────────────
   const anthropic = new Anthropic();
 
@@ -193,6 +217,11 @@ export async function POST(request: NextRequest) {
 
         // ── 5. Persiste análise e custo no DB (best-effort) ─────────────────
         try {
+          const similarArchetypeId = extractSimilarArchetype(
+            fullText,
+            built.archetypes,
+          );
+
           await db.insert(analysesTable).values({
             id: analysisId,
             gameId,
@@ -201,6 +230,7 @@ export async function POST(request: NextRequest) {
             analysisText: fullText,
             promptVersionId: built.promptVersionId,
             metaSnapshotId: built.metaSnapshotId,
+            similarArchetypeId,
             responseTimeMs,
           });
 
@@ -232,6 +262,7 @@ export async function POST(request: NextRequest) {
       "X-Content-Type-Options": "nosniff",
       "Cache-Control": "no-cache, no-store",
       "X-Analysis-Id": analysisId,
+      "X-Meta-Color-Map": colorMapHeader,
     },
   });
 }
