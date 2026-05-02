@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { getParser, getCardAPI } from "@/lib/games";
+import { getParser, getCardAPI, getValidator } from "@/lib/games";
 import type { GameConfig } from "@/lib/game-config";
 import type { EnrichedCard, ParsedCard } from "@/lib/games/types";
 import AnalysisStream from "./AnalysisStream";
@@ -17,6 +17,26 @@ function sumQty(cards: { quantity: number }[]): number {
   return cards.reduce((acc, c) => acc + c.quantity, 0);
 }
 
+// ─── Mapeamento de erros HTTP → mensagem amigável ─────────────────────────────
+
+function httpErrorMessage(status: number, serverMessage?: string): string {
+  if (status === 422) {
+    return (
+      serverMessage ?? "Verifica os problemas no deck antes de analisar."
+    );
+  }
+  if (status === 503 || status === 429) {
+    return "A análise está temporariamente indisponível — aguarda um instante e tenta de novo.";
+  }
+  if (status === 404) {
+    return "Jogo não encontrado — verifique se o endereço está correto.";
+  }
+  if (status >= 500) {
+    return "Algo deu errado no servidor. Tenta de novo em alguns segundos.";
+  }
+  return "Ocorreu um problema inesperado. Tenta de novo.";
+}
+
 // ─── State machine ────────────────────────────────────────────────────────────
 
 type AnalysisPhase = "idle" | "enriching" | "streaming" | "done" | "error";
@@ -24,10 +44,18 @@ type AnalysisPhase = "idle" | "enriching" | "streaming" | "done" | "error";
 interface AnalysisState {
   phase: AnalysisPhase;
   text: string;
+  /** Mensagem genérica de erro (conexão, servidor). */
   error: string;
+  /** Erros de validação do deck — quando preenchido, mostra lista coach-tone. */
+  validationErrors: string[];
 }
 
-const IDLE: AnalysisState = { phase: "idle", text: "", error: "" };
+const IDLE: AnalysisState = {
+  phase: "idle",
+  text: "",
+  error: "",
+  validationErrors: [],
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -73,7 +101,6 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
   const handleDeckChange = useCallback(
     (value: string) => {
       setDeck(value);
-      // Editar o deck enquanto análise está pronta reinicia o estado
       if (analysis.phase === "done" || analysis.phase === "error") {
         setAnalysis(IDLE);
       }
@@ -88,16 +115,29 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
     const abort = new AbortController();
     abortRef.current = abort;
 
+    // ── Layer 3: Validação do deck (sem chamar a API) ─────────────────────
+    const validator = getValidator(gameConfig.id);
+    const validation = validator.validate(parsed, gameConfig.deck_rules);
+
+    if (!validation.valid) {
+      setAnalysis({
+        phase: "error",
+        text: "",
+        error: "",
+        validationErrors: validation.errors,
+      });
+      return;
+    }
+
     try {
-      // ── 1. Enriquecer cartas via API externa ─────────────────────────────
-      setAnalysis({ phase: "enriching", text: "", error: "" });
+      // ── Enriquecer cartas via API externa ─────────────────────────────
+      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [] });
 
       const allCards: ParsedCard[] = [
         ...parsed.mainDeck,
         ...Object.values(parsed.auxDecks).flat(),
       ];
 
-      // Deduplica por código para minimizar chamadas à API
       const seenCodes = new Set<string>();
       const uniqueCards = allCards.filter((c) => {
         if (seenCodes.has(c.cardCode)) return false;
@@ -125,26 +165,44 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         data: enrichedMap.get(card.cardCode) ?? null,
       }));
 
-      // ── 2. Streaming da análise via /api/analyze ─────────────────────────
-      setAnalysis({ phase: "streaming", text: "", error: "" });
+      // ── Streaming da análise via /api/analyze ─────────────────────────
+      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [] });
 
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abort.signal,
-        body: JSON.stringify({
-          gameId: gameConfig.id,
-          deck: parsed,
-          enrichedCards,
-        }),
-      });
+      // Layer 1: erro de rede na requisição inicial
+      let res: Response;
+      try {
+        res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: abort.signal,
+          body: JSON.stringify({
+            gameId: gameConfig.id,
+            deck: parsed,
+            enrichedCards,
+          }),
+        });
+      } catch (fetchErr) {
+        if ((fetchErr as { name?: string }).name === "AbortError") return;
+        setAnalysis({
+          phase: "error",
+          text: "",
+          error:
+            "Não consegui conectar agora — tenta de novo em alguns segundos.",
+          validationErrors: [],
+        });
+        return;
+      }
 
+      // Layer 2: erro HTTP do servidor
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const msg =
-          (body as { error?: string } | null)?.error ??
-          `Erro ${res.status} — tente novamente.`;
-        setAnalysis({ phase: "error", text: "", error: msg });
+        const serverMsg = (body as { error?: string } | null)?.error;
+        setAnalysis({
+          phase: "error",
+          text: "",
+          error: httpErrorMessage(res.status, serverMsg),
+          validationErrors: [],
+        });
         return;
       }
 
@@ -152,11 +210,13 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         setAnalysis({
           phase: "error",
           text: "",
-          error: "Resposta inválida do servidor.",
+          error: "Resposta inesperada do servidor — tenta de novo.",
+          validationErrors: [],
         });
         return;
       }
 
+      // ── Leitura do stream ─────────────────────────────────────────────
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
@@ -169,20 +229,23 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           return;
         }
         fullText += decoder.decode(value, { stream: true });
-        setAnalysis({ phase: "streaming", text: fullText, error: "" });
+        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [] });
       }
 
-      setAnalysis({ phase: "done", text: fullText, error: "" });
+      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [] });
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
+      // Layer 1: erro de stream (conexão caiu durante a leitura)
       console.error("[analyze]", err);
       setAnalysis({
         phase: "error",
         text: "",
-        error: "Erro de conexão. Verifique sua internet e tente novamente.",
+        error:
+          "A conexão caiu no meio da análise — tenta de novo em alguns segundos.",
+        validationErrors: [],
       });
     }
-  }, [parsed, isReady, gameConfig.id]);
+  }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
@@ -289,10 +352,27 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         </div>
       )}
 
-      {/* Botão Analisar / erro */}
+      {/* Erros de validação do deck — tom de coach, lista estruturada */}
+      {phase === "error" && analysis.validationErrors.length > 0 && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+          <p className="text-xs font-medium text-amber-400/90">
+            Ajusta o deck antes de continuar:
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {analysis.validationErrors.map((msg, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="mt-0.5 shrink-0 text-amber-400/70">→</span>
+                {msg}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Botão Analisar / erro de conexão ou servidor */}
       {(phase === "idle" || phase === "error") && (
         <>
-          {phase === "error" && (
+          {phase === "error" && analysis.error && (
             <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive/80">
               {analysis.error}
             </p>
@@ -304,14 +384,16 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
               className="w-full sm:w-auto"
               onClick={handleAnalyze}
             >
-              Analisar deck
+              {phase === "error" ? "Tentar de novo" : "Analisar deck"}
             </Button>
-            <a
-              href="#exemplo"
-              className="text-center text-sm text-muted-foreground transition-colors hover:text-foreground underline underline-offset-4 sm:text-right"
-            >
-              ver análise de exemplo
-            </a>
+            {phase === "idle" && (
+              <a
+                href="#exemplo"
+                className="text-center text-sm text-muted-foreground transition-colors hover:text-foreground underline underline-offset-4 sm:text-right"
+              >
+                ver análise de exemplo
+              </a>
+            )}
           </div>
         </>
       )}

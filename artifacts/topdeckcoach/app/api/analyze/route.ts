@@ -39,6 +39,34 @@ const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000; // $15 / MTok
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Loga erros do SDK Anthropic com contexto suficiente para diagnóstico.
+ * NUNCA expõe detalhes técnicos ao cliente — apenas para os logs do servidor.
+ */
+function logAnthropicError(analysisId: string, err: unknown): void {
+  if (err instanceof Anthropic.APIConnectionError) {
+    console.error(
+      `[analyze][${analysisId}] Anthropic sem conexão: ${err.message}`,
+    );
+  } else if (err instanceof Anthropic.RateLimitError) {
+    console.error(
+      `[analyze][${analysisId}] Anthropic rate limit (${err.status}): ${err.message}`,
+    );
+  } else if (err instanceof Anthropic.AuthenticationError) {
+    console.error(
+      `[analyze][${analysisId}] Anthropic autenticação falhou — verificar ANTHROPIC_API_KEY nos Secrets`,
+    );
+  } else if (err instanceof Anthropic.APITimeoutError) {
+    console.error(`[analyze][${analysisId}] Anthropic timeout`);
+  } else if (err instanceof Anthropic.APIStatusError) {
+    console.error(
+      `[analyze][${analysisId}] Anthropic HTTP ${err.status}: ${err.message}`,
+    );
+  } else {
+    console.error(`[analyze][${analysisId}] erro inesperado:`, err);
+  }
+}
+
 /** Reconstrói texto legível da decklist a partir do ParsedDeck para armazenar. */
 function deckToText(deck: ParsedDeck): string {
   const lines: string[] = deck.mainDeck.map(
@@ -85,6 +113,18 @@ export async function POST(request: NextRequest) {
       : [];
   } catch {
     return Response.json({ error: "Body inválido" }, { status: 400 });
+  }
+
+  // ── 1b. Validação estrutural mínima do deck ──────────────────────────────────
+  if (!deck.mainDeck || deck.mainDeck.length === 0) {
+    return Response.json(
+      {
+        error:
+          "Cole a decklist no campo antes de analisar (ex: 4 BT13-040 Magnamon).",
+        type: "validation",
+      },
+      { status: 422 },
+    );
   }
 
   // ── 2. Monta o prompt (carrega game/prompt/snapshot do DB com cache 60 s) ────
@@ -169,8 +209,10 @@ export async function POST(request: NextRequest) {
           console.error("[analyze] falha ao salvar no DB:", dbErr);
         }
       } catch (err) {
-        console.error("[analyze] erro no stream Anthropic:", err);
-        controller.error(err);
+        logAnthropicError(analysisId, err);
+        // Fecha o stream com erro — o cliente receberá um DOMException na leitura
+        // e exibirá mensagem genérica amigável (nunca expõe detalhes técnicos)
+        controller.error(new Error("stream_error"));
         return;
       }
 
