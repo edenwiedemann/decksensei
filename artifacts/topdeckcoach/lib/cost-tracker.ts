@@ -57,22 +57,34 @@ export async function trackCost(
 
 /**
  * Retorna a soma dos custos (em USD) registrados no dia especificado.
- * Usa o fuso horário UTC do servidor.
+ * Usa o fuso horário America/Sao_Paulo (= horário Recife) para delimitar o dia.
  *
- * @param date Data de referência (default: hoje)
+ * @param date Data de referência administrativa (default: hoje em SP)
  * @returns    Total em USD como número de ponto flutuante
  */
 export async function getDailyCost(date?: Date): Promise<number> {
-  const ref = date ?? new Date();
-  // Formato YYYY-MM-DD
-  const dateStr = ref.toISOString().slice(0, 10);
+  let result: { rows: Array<{ total: string | null }> };
 
-  const result = await pool.query<{ total: string | null }>(
-    `SELECT COALESCE(SUM(cost_usd), 0)::text AS total
-     FROM api_costs
-     WHERE DATE(created_at AT TIME ZONE 'UTC') = $1`,
-    [dateStr],
-  );
+  if (date) {
+    // Caso administrativo: converte a data explícita para YYYY-MM-DD em SP
+    const dateStr = date.toLocaleDateString("en-CA", {
+      timeZone: "America/Sao_Paulo",
+    });
+    result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(cost_usd), 0)::text AS total
+       FROM api_costs
+       WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') = $1`,
+      [dateStr],
+    );
+  } else {
+    // Caso padrão: deixa o Postgres calcular "hoje" em SP sem parâmetro externo
+    result = await pool.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(cost_usd), 0)::text AS total
+       FROM api_costs
+       WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') =
+             DATE(NOW() AT TIME ZONE 'America/Sao_Paulo')`,
+    );
+  }
 
   const raw = result.rows[0]?.total ?? "0";
   return parseFloat(raw);
