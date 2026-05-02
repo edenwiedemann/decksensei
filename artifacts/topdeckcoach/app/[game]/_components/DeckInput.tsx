@@ -132,13 +132,14 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         error: "",
         validationErrors: validation.errors,
         colorMap: {},
+        analysisId: "",
       });
       return;
     }
 
     try {
       // ── Enriquecer cartas via API externa ─────────────────────────────
-      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [], colorMap: {} });
+      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [], colorMap: {}, analysisId: "" });
 
       const allCards: ParsedCard[] = [
         ...parsed.mainDeck,
@@ -173,7 +174,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
       }));
 
       // ── Streaming da análise via /api/analyze ─────────────────────────
-      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [], colorMap: {} });
+      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [], colorMap: {}, analysisId: "" });
 
       // Layer 1: erro de rede na requisição inicial
       let res: Response;
@@ -196,6 +197,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           error: "Não consegui conectar agora — tenta de novo em alguns segundos.",
           validationErrors: [],
           colorMap: {},
+          analysisId: "",
         });
         return;
       }
@@ -210,6 +212,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           error: httpErrorMessage(res.status, serverMsg),
           validationErrors: [],
           colorMap: {},
+          analysisId: "",
         });
         return;
       }
@@ -221,6 +224,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           error: "Resposta inesperada do servidor — tenta de novo.",
           validationErrors: [],
           colorMap: {},
+          analysisId: "",
         });
         return;
       }
@@ -262,6 +266,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         error: "A conexão caiu no meio da análise — tenta de novo em alguns segundos.",
         validationErrors: [],
         colorMap: {},
+        analysisId: "",
       });
     }
   }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules]);
