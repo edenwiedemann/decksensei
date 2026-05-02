@@ -35,6 +35,21 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/admin/prompts/new/page.js"
+    ],
+    "/admin/meta/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/meta/page.js"
+    ],
+    "/admin/meta/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/meta/[id]/page.js"
+    ],
+    "/admin/meta/[id]/archetype/[archIdx]/edit/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/meta/[id]/archetype/[archIdx]/edit/page.js"
     ]
   }
 }
