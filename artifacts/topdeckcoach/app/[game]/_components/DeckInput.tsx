@@ -7,10 +7,12 @@ import { getParser, getCardAPI, getValidator } from "@/lib/games";
 import type { GameConfig } from "@/lib/game-config";
 import type { EnrichedCard, ParsedCard } from "@/lib/games/types";
 import AnalysisStream from "./AnalysisStream";
+import FeaturedModal from "./FeaturedModal";
 
 interface DeckInputProps {
   placeholder: string;
   gameConfig: GameConfig;
+  featuredAnalysis?: { text: string; playerName: string };
 }
 
 function sumQty(cards: { quantity: number }[]): number {
@@ -65,9 +67,10 @@ const IDLE: AnalysisState = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
+export default function DeckInput({ placeholder, gameConfig, featuredAnalysis }: DeckInputProps) {
   const [deck, setDeck] = useState("");
   const [analysis, setAnalysis] = useState<AnalysisState>(IDLE);
+  const [showFeatured, setShowFeatured] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const parsed = useMemo(() => {
@@ -410,13 +413,14 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
             >
               {phase === "error" ? "Tentar de novo" : "Analisar deck"}
             </Button>
-            {phase === "idle" && (
-              <a
-                href="#exemplo"
+            {phase === "idle" && featuredAnalysis && (
+              <button
+                type="button"
+                onClick={() => setShowFeatured(true)}
                 className="text-center text-sm text-muted-foreground transition-colors hover:text-foreground underline underline-offset-4 sm:text-right"
               >
                 ver análise de exemplo
-              </a>
+              </button>
             )}
           </div>
         </>
@@ -434,6 +438,15 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
             onReset={handleReset}
           />
         </div>
+      )}
+
+      {/* Modal de análise featured */}
+      {showFeatured && featuredAnalysis && (
+        <FeaturedModal
+          analysisText={featuredAnalysis.text}
+          playerName={featuredAnalysis.playerName}
+          onClose={() => setShowFeatured(false)}
+        />
       )}
     </div>
   );

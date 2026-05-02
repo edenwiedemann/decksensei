@@ -1,6 +1,4 @@
-import { db } from "@workspace/db";
-import { gamesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, analysesTable, gamesTable, eq, and, isNull } from "@workspace/db";
 import { notFound } from "next/navigation";
 import DeckInput from "./_components/DeckInput";
 import type { GameConfig } from "@/lib/game-config";
@@ -31,24 +29,45 @@ const GAME_BADGE_LABELS: Record<string, string> = {
 export default async function GamePage({ params }: GamePageProps) {
   const { game } = await params;
 
-  const [gameData] = await db
-    .select()
-    .from(gamesTable)
-    .where(eq(gamesTable.id, game))
-    .limit(1);
+  // Busca jogo e análise featured em paralelo
+  const [gameResults, featuredResults] = await Promise.all([
+    db
+      .select()
+      .from(gamesTable)
+      .where(eq(gamesTable.id, game))
+      .limit(1),
+    db
+      .select({
+        analysisText: analysesTable.analysisText,
+        adminNote: analysesTable.adminNote,
+      })
+      .from(analysesTable)
+      .where(
+        and(
+          eq(analysesTable.gameId, game),
+          eq(analysesTable.isFeatured, true),
+          isNull(analysesTable.deletedAt),
+        ),
+      )
+      .limit(1),
+  ]);
 
-  if (!gameData) {
-    notFound();
-  }
+  const gameData = gameResults[0];
+  if (!gameData) notFound();
 
-  const placeholder =
-    DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
+  const featured = featuredResults[0] ?? null;
+
+  const placeholder = DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
   const badgeLabel = GAME_BADGE_LABELS[game] ?? gameData.name;
 
   const gameConfig: GameConfig =
     typeof gameData.config === "string"
       ? JSON.parse(gameData.config)
       : (gameData.config as GameConfig);
+
+  const featuredAnalysis = featured
+    ? { text: featured.analysisText, playerName: featured.adminNote ?? "filho" }
+    : undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
@@ -84,7 +103,8 @@ export default async function GamePage({ params }: GamePageProps) {
         <div className="rounded-xl border border-border/60 bg-card/60 p-6 shadow-xl backdrop-blur-sm">
           <DeckInput
             placeholder={placeholder}
-            gameConfig={gameData.config as GameConfig}
+            gameConfig={gameConfig}
+            featuredAnalysis={featuredAnalysis}
           />
         </div>
       </section>
