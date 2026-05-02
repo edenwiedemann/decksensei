@@ -50,21 +50,21 @@ const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000; // $15 / MTok
  * NUNCA expõe detalhes técnicos ao cliente — apenas para os logs do servidor.
  */
 function logAnthropicError(analysisId: string, err: unknown): void {
-  if (err instanceof Anthropic.APIConnectionError) {
+  if (err instanceof APIConnectionTimeoutError) {
+    console.error(`[analyze][${analysisId}] Anthropic timeout`);
+  } else if (err instanceof APIConnectionError) {
     console.error(
       `[analyze][${analysisId}] Anthropic sem conexão: ${err.message}`,
     );
-  } else if (err instanceof Anthropic.RateLimitError) {
+  } else if (err instanceof RateLimitError) {
     console.error(
       `[analyze][${analysisId}] Anthropic rate limit (${err.status}): ${err.message}`,
     );
-  } else if (err instanceof Anthropic.AuthenticationError) {
+  } else if (err instanceof AuthenticationError) {
     console.error(
       `[analyze][${analysisId}] Anthropic autenticação falhou — verificar ANTHROPIC_API_KEY nos Secrets`,
     );
-  } else if (err instanceof Anthropic.APITimeoutError) {
-    console.error(`[analyze][${analysisId}] Anthropic timeout`);
-  } else if (err instanceof Anthropic.APIStatusError) {
+  } else if (err instanceof APIError) {
     console.error(
       `[analyze][${analysisId}] Anthropic HTTP ${err.status}: ${err.message}`,
     );
