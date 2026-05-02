@@ -1,13 +1,84 @@
+import { db } from "@workspace/db";
+import { gamesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
+import DeckInput from "./_components/DeckInput";
+
 interface GamePageProps {
   params: Promise<{ game: string }>;
 }
 
+const DECK_PLACEHOLDERS: Record<string, string> = {
+  digimon: `Cole sua decklist aqui (formato Digimon padrão: 4 BT13-040 Magnamon)
+
+Exemplo:
+4 BT13-040 Magnamon
+4 BT20-083 Omekamon
+4 BT13-087 Dynasmon
+3 BT13-019 Gankoomon
+4 BT20-102 Omnimon (X Antibody)
+...
+
+Egg deck:
+4 BT13-007 King Drasil_7D6`,
+};
+
+const GAME_BADGE_LABELS: Record<string, string> = {
+  digimon: "Digimon",
+};
+
 export default async function GamePage({ params }: GamePageProps) {
   const { game } = await params;
 
-  if (!["digimon"].includes(game)) {
-    return <p>Jogo não suportado: {game}</p>;
+  const [gameData] = await db
+    .select()
+    .from(gamesTable)
+    .where(eq(gamesTable.id, game))
+    .limit(1);
+
+  if (!gameData) {
+    notFound();
   }
 
-  return null;
+  const placeholder =
+    DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
+  const badgeLabel = GAME_BADGE_LABELS[game] ?? gameData.name;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
+      {/* Header */}
+      <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-4 backdrop-blur-sm border-b border-border/40">
+        <span className="text-base font-semibold tracking-tight text-foreground">
+          TopdeckCoach
+        </span>
+        <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/25">
+          {badgeLabel}
+        </span>
+      </header>
+
+      {/* Hero — 60vh */}
+      <section className="flex min-h-[60vh] flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            Seu deck de{" "}
+            <span className="text-primary">{gameData.name}</span>,
+            <br className="hidden sm:block" /> analisado por IA
+          </h1>
+
+          <p className="mt-6 text-base leading-relaxed text-muted-foreground sm:text-lg sm:leading-relaxed max-w-2xl mx-auto">
+            Cole sua decklist e receba em 30 segundos uma análise estratégica
+            completa: plano de jogo, pontos fortes, vulnerabilidades e sugestões
+            de troca baseadas no meta atual.
+          </p>
+        </div>
+      </section>
+
+      {/* Form section */}
+      <section className="mx-auto max-w-2xl px-6 pb-24">
+        <div className="rounded-xl border border-border/60 bg-card/60 p-6 shadow-xl backdrop-blur-sm">
+          <DeckInput placeholder={placeholder} />
+        </div>
+      </section>
+    </div>
+  );
 }
