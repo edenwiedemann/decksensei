@@ -10,7 +10,7 @@ Projeto pai-e-filho: pai cuida da parte técnica, filho (jogador competitivo de 
 
 ## Stack
 
-- **Framework:** Next.js 15 + App Router + TypeScript strict mode
+- **Framework:** Next.js 15.5 (`^15.3.0`, instalado 15.5.15) + App Router + TypeScript strict mode
 - **Estilo:** Tailwind CSS v4 + shadcn/ui
 - **Banco:** PostgreSQL (Replit) + Drizzle ORM
 - **IA:** Anthropic SDK (`@anthropic-ai/sdk`) — motor de análise via streaming
@@ -127,14 +127,12 @@ pnpm --filter @workspace/db run push             # aplicar schema no banco
 npx tsc --noEmit                                  # type check (zero erros)
 ```
 
-## Histórico de bugs corrigidos
+## Mudanças recentes
 
-- Diretório `src/` (scaffold Vite morto) removido — conflitava com App Router
-- `.next` cache limpo após remoção do `src/`
-- `env.ts` usa `REPLIT_DOMAINS` como fallback para `APP_URL`
-- `lib/game-config.ts`: `DeckRules` re-exportado corretamente com import local
-- `app/admin/feedback/page.tsx`: coluna `deck_text` (não `decklist_raw`)
 - Middleware: `/api/admin/login` excluído da proteção (antes bloqueava login)
 - `app/api/admin/analyses/recent/route.ts`: removido JOIN em `meta_archetypes` (tabela inexistente)
 - `env.ts`: banner de erro renomeado de "TopdeckCoach" para "Deck Sensei"
 - `app/layout.tsx`: adicionado `icons.icon` para favicon.svg (resolve 404 de favicon.ico)
+- Cache da featured analysis via `unstable_cache` (revalidate: 300s, tag `featured-analysis`)
+
+> Histórico completo em `CHANGELOG.md` na raiz do repositório.
