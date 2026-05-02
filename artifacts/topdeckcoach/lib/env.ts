@@ -70,7 +70,7 @@ const DATABASE_URL = required("DATABASE_URL");
 const ANTHROPIC_API_KEY = required("ANTHROPIC_API_KEY");
 const RESEND_API_KEY = required("RESEND_API_KEY");
 const ADMIN_EMAIL = required("ADMIN_EMAIL");
-const ADMIN_TOKEN = requiredMinLength("ADMIN_TOKEN", 8);
+const ADMIN_TOKEN = requiredMinLength("ADMIN_TOKEN", 32);
 const APP_URL = requiredUrl("APP_URL", "REPLIT_DOMAINS");
 const DAILY_COST_CAP_USD = optionalNumeric("DAILY_COST_CAP_USD", "10");
 
