@@ -1,5 +1,3 @@
 {
-  "/api/health/route": "app/api/health/route.js",
-  "/[game]/page": "app/[game]/page.js",
-  "/admin/login/page": "app/admin/login/page.js"
+  "/[game]/page": "app/[game]/page.js"
 }
