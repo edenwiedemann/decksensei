@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { db, magicTokensTable, eq, sql, and, isNull, gt } from "@workspace/db";
+import { db, magicTokensTable, sql } from "@workspace/db";
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -19,27 +19,14 @@ export async function generateToken(userId: number): Promise<string> {
 
 export async function verifyToken(token: string): Promise<number | null> {
   const tokenHash = hashToken(token);
-  const now = new Date();
-
-  const rows = await db
-    .select()
-    .from(magicTokensTable)
-    .where(
-      and(
-        eq(magicTokensTable.tokenHash, tokenHash),
-        isNull(magicTokensTable.usedAt),
-        gt(magicTokensTable.expiresAt, now),
-      ),
-    )
-    .limit(1);
-
-  const row = rows[0];
-  if (!row) return null;
-
-  await db
-    .update(magicTokensTable)
-    .set({ usedAt: sql`NOW()` })
-    .where(eq(magicTokensTable.tokenHash, tokenHash));
-
-  return row.userId;
+  const result = await db.execute(sql`
+    UPDATE magic_tokens
+    SET used_at = NOW()
+    WHERE token_hash = ${tokenHash}
+      AND used_at IS NULL
+      AND expires_at > NOW()
+    RETURNING user_id
+  `);
+  const rows = (result as unknown as { rows: Array<{ user_id: number }> }).rows;
+  return rows[0]?.user_id ?? null;
 }
