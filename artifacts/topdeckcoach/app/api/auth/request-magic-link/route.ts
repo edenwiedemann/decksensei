@@ -92,9 +92,9 @@ export async function POST(req: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: "TopdeckCoach <noreply@topdeckcoach.com.br>",
+        from: "Deck Sensei <noreply@decksensei.com.br>",
         to: normalizedEmail,
-        subject: "Seu link de acesso ao TopdeckCoach",
+        subject: "Seu link de acesso ao Deck Sensei",
         text: [
           "Olá!",
           "",
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
           "Esse link expira em 15 minutos.",
           "Se não foi você, ignore esse email.",
           "",
-          "— TopdeckCoach",
+          "— Deck Sensei",
         ].join("\n"),
       });
     } catch (emailErr) {

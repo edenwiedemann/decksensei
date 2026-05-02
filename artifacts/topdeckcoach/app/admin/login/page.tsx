@@ -43,11 +43,12 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
+          <img src="/logo-transparent.png" alt="Deck Sensei" className="mx-auto mb-4 h-16 w-auto" />
           <p className="text-xs uppercase tracking-widest text-muted-foreground/60">
-            TopdeckCoach
+            Deck Sensei
           </p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
             Painel Admin

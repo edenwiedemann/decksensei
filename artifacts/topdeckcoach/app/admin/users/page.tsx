@@ -75,7 +75,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const exportHref = `/api/admin/users/export${q ? `?q=${encodeURIComponent(q)}` : ""}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-border/40 px-6 py-4">
         <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

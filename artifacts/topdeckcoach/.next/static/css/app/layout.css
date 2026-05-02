@@ -665,6 +665,9 @@
   .h-28 {
     height: calc(var(--spacing) * 28);
   }
+  .h-36 {
+    height: calc(var(--spacing) * 36);
+  }
   .h-64 {
     height: calc(var(--spacing) * 64);
   }
@@ -2079,13 +2082,26 @@
     --tw-gradient-from: hsl(224,40%,5%);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
+  .from-\[hsl\(240\,30\%\,5\%\)\] {
+    --tw-gradient-from: hsl(240,30%,5%);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
   .via-\[hsl\(224\,38\%\,7\%\)\] {
     --tw-gradient-via: hsl(224,38%,7%);
     --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
     --tw-gradient-stops: var(--tw-gradient-via-stops);
   }
+  .via-\[hsl\(240\,25\%\,7\%\)\] {
+    --tw-gradient-via: hsl(240,25%,7%);
+    --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-via-stops);
+  }
   .to-\[hsl\(224\,35\%\,10\%\)\] {
     --tw-gradient-to: hsl(224,35%,10%);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+  .to-\[hsl\(240\,22\%\,9\%\)\] {
+    --tw-gradient-to: hsl(240,22%,9%);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
   .fill-current {
@@ -2754,6 +2770,11 @@
   }
   .outline-transparent {
     outline-color: transparent;
+  }
+  .drop-shadow-\[0_0_40px_rgba\(78\,107\,255\,0\.35\)\] {
+    --tw-drop-shadow-size: drop-shadow(0 0 40px var(--tw-drop-shadow-color, rgba(78,107,255,0.35)));
+    --tw-drop-shadow: var(--tw-drop-shadow-size);
+    filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
   }
   .backdrop-blur-sm {
     --tw-backdrop-blur: blur(var(--blur-sm));
@@ -5445,17 +5466,17 @@
   }
 }
 :root {
-  --background: 224 40% 5%;
-  --foreground: 213 31% 95%;
-  --card: 224 35% 8%;
-  --card-foreground: 213 31% 95%;
-  --primary: 217 85% 62%;
+  --background: 240 30% 5%;
+  --foreground: 240 18% 95%;
+  --card: 240 25% 8%;
+  --card-foreground: 240 18% 95%;
+  --primary: 234 88% 62%;
   --primary-foreground: 0 0% 100%;
-  --muted: 222 25% 14%;
-  --muted-foreground: 218 15% 55%;
-  --border: 222 20% 18%;
-  --input: 222 20% 18%;
-  --ring: 217 85% 62%;
+  --muted: 238 20% 13%;
+  --muted-foreground: 238 12% 55%;
+  --border: 238 16% 17%;
+  --input: 238 16% 17%;
+  --ring: 234 88% 62%;
   --radius: 0.5rem;
   --app-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
     sans-serif;
@@ -5687,6 +5708,59 @@
   inherits: false;
   initial-value: solid;
 }
+@property --tw-blur {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-brightness {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-contrast {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-grayscale {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-hue-rotate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-invert {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-opacity {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-saturate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-sepia {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-drop-shadow-size {
+  syntax: "*";
+  inherits: false;
+}
 @property --tw-backdrop-blur {
   syntax: "*";
   inherits: false;
@@ -5806,6 +5880,19 @@
       --tw-ring-offset-color: #fff;
       --tw-ring-offset-shadow: 0 0 #0000;
       --tw-outline-style: solid;
+      --tw-blur: initial;
+      --tw-brightness: initial;
+      --tw-contrast: initial;
+      --tw-grayscale: initial;
+      --tw-hue-rotate: initial;
+      --tw-invert: initial;
+      --tw-opacity: initial;
+      --tw-saturate: initial;
+      --tw-sepia: initial;
+      --tw-drop-shadow: initial;
+      --tw-drop-shadow-color: initial;
+      --tw-drop-shadow-alpha: 100%;
+      --tw-drop-shadow-size: initial;
       --tw-backdrop-blur: initial;
       --tw-backdrop-brightness: initial;
       --tw-backdrop-contrast: initial;

@@ -11,7 +11,7 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
   // ── Erro explícito (link inválido/expirado/já usado) ──────────────────────
   if (error === "invalid" || (!token && !error)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)] px-6">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6">
         <div className="w-full max-w-sm rounded-xl border border-border/60 bg-card/60 p-8 text-center shadow-xl backdrop-blur-sm">
           <div className="mb-4 flex justify-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/15 text-2xl">
@@ -38,7 +38,7 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
 
   // ── Token presente — auto-submit do server action ─────────────────────────
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6">
       <div className="w-full max-w-sm rounded-xl border border-border/60 bg-card/60 p-8 text-center shadow-xl backdrop-blur-sm">
         <div className="mb-4 flex justify-center">
           <span className="flex h-12 w-12 animate-pulse items-center justify-center rounded-full bg-primary/15 text-2xl">

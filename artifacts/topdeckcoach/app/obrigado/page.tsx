@@ -22,7 +22,7 @@ const MESSAGES: Record<string, Message> = {
     body: "Quanto mais jogadores analisarem o deck, mais forte o meta fica pra todo mundo. Chama o pessoal!",
   },
   signup: {
-    title: "Bem-vindo ao TopdeckCoach!",
+    title: "Bem-vindo ao Deck Sensei!",
     subtitle: "Sua conta tá pronta. Agora é só jogar.",
     body: "De agora em diante você tem análises ilimitadas. Manda ver nos torneios!",
   },
@@ -60,14 +60,15 @@ export default async function ObrigadoPage({ searchParams }: ObrigadoPageProps) 
   const msg = (from && MESSAGES[from]) ? MESSAGES[from] : DEFAULT_MESSAGE;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)] px-6 py-16">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6 py-16">
       {/* Header */}
       <header className="mb-16 flex items-center gap-3">
+        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
         <Link
           href="/digimon"
           className="text-base font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
         >
-          TopdeckCoach
+          Deck Sensei
         </Link>
       </header>
 

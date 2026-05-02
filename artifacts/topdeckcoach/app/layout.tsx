@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TopdeckCoach",
+  title: "Deck Sensei",
   description:
     "Análise estratégica de decks de TCG por inteligência artificial, em português brasileiro.",
 };

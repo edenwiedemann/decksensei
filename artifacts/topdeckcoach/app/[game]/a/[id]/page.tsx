@@ -54,12 +54,12 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const analysis = await getAnalysis(id, game);
 
   if (!analysis) {
-    return { title: "Análise não encontrada — TopdeckCoach" };
+    return { title: "Análise não encontrada — Deck Sensei" };
   }
 
   const description = plainText(analysis.analysisText);
-  const title = `Análise de deck ${analysis.gameName} — TopdeckCoach`;
-  const url = `https://topdeckcoach.com/${game}/a/${id}`;
+  const title = `Análise de deck ${analysis.gameName} — Deck Sensei`;
+  const url = `https://decksensei.com.br/${game}/a/${id}`;
 
   return {
     title,
@@ -68,7 +68,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
       title,
       description,
       url,
-      siteName: "TopdeckCoach",
+      siteName: "Deck Sensei",
       type: "article",
       locale: "pt_BR",
     },
@@ -96,14 +96,15 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
-      <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-4 backdrop-blur-sm border-b border-border/40">
+      <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-3 backdrop-blur-sm border-b border-border/40">
+        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
         <a
           href={`/${game}`}
           className="text-base font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
         >
-          TopdeckCoach
+          Deck Sensei
         </a>
         <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/25">
           {analysis.gameName}

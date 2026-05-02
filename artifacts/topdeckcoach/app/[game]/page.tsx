@@ -32,7 +32,6 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
   const { resume } = await searchParams;
   const autoResume = resume === "true";
 
-  // Busca jogo e análise featured em paralelo
   const [gameResults, featuredResults] = await Promise.all([
     db
       .select()
@@ -73,11 +72,12 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
     : undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
-      <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-4 backdrop-blur-sm border-b border-border/40">
+      <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-3 backdrop-blur-sm border-b border-border/40">
+        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
         <span className="text-base font-semibold tracking-tight text-foreground">
-          TopdeckCoach
+          Deck Sensei
         </span>
         <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/25">
           {badgeLabel}
@@ -87,6 +87,13 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
       {/* Hero — 60vh */}
       <section className="flex min-h-[60vh] flex-col items-center justify-center px-6 py-16 text-center">
         <div className="mx-auto max-w-3xl">
+          {/* Logo */}
+          <img
+            src="/logo-transparent.png"
+            alt="Deck Sensei"
+            className="mx-auto mb-8 h-36 w-auto drop-shadow-[0_0_40px_rgba(78,107,255,0.35)]"
+          />
+
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
             Seu deck de{" "}
             <span className="text-primary">{gameData.name}</span>,
