@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@radix-ui/react-slot": "^1.2.0",
     "@workspace/db": "workspace:*",
     "class-variance-authority": "catalog:",
