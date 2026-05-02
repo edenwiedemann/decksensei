@@ -91,15 +91,17 @@ Ver `.env.example`. Configuradas no Replit:
 - `DATABASE_URL` — auto-injetada pelo Postgres do Replit
 - `ANTHROPIC_API_KEY` — secret
 - `RESEND_API_KEY` — secret
-- `ADMIN_TOKEN` — env var compartilhada (mín. 32 chars)
+- `ADMIN_EMAIL` — e-mail único que faz login no `/admin` (obrigatório)
+- `ADMIN_TOKEN` — senha do painel `/admin`, usada junto com `ADMIN_EMAIL` (obrigatório)
 - `APP_URL` — usa `REPLIT_DOMAINS` como fallback automático
 - `DAILY_COST_CAP_USD` — opcional (default: "10")
 
 ## Autenticação admin
 
-- Cookie `admin_session` = SHA-256 do ADMIN_TOKEN
-- Header `x-admin-token` também aceito (para chamadas diretas de API)
-- Middleware em `middleware.ts`: bloqueia `/admin/*` e `/api/admin/*`, exceto `/admin/login` e `/api/admin/login`
+- Login em `/admin/login` exige **e-mail** (`ADMIN_EMAIL`) + **senha** (`ADMIN_TOKEN`)
+- Cookie `admin_session` = SHA-256 de `"email:token"`
+- Header `x-admin-token` também aceito para chamadas diretas de API (token bruto)
+- Middleware em `middleware.ts`: valida cookie criptograficamente via Web Crypto API; bloqueia `/admin/*` e `/api/admin/*`, exceto `/admin/login` e `/api/admin/login`
 - Validação criptográfica com `timingSafeEqual` em `lib/auth/admin.ts`
 
 ## Roteamento
