@@ -1,0 +1,530 @@
+{
+  "$schema_version": "2.0.0",
+  "game": {
+    "id": "digimon",
+    "name": "Digimon Card Game",
+    "name_pt": "Digimon Card Game",
+    "card_code_pattern": "^(BT|EX|ST|P|LM|RB)\\d+-\\d+$",
+    "card_code_examples": ["BT13-007", "EX8-009", "ST20-11", "P-040", "LM-029"],
+    "deck_rules": {
+      "main_deck_size": 50,
+      "egg_deck_min": 0,
+      "egg_deck_max": 5,
+      "max_copies_per_card": 4,
+      "notes_pt": "Main deck deve ter exatamente 50 cartas. Egg deck (ovos) pode ter de 0 a 5. Limite de 4 cópias por código de carta."
+    },
+    "card_data_source": {
+      "name": "digimoncard.io",
+      "endpoint": "https://digimoncard.io/api-public/search",
+      "rate_limit": "15 req per 10s",
+      "license_notes_pt": "API pública da digimoncard.io — usar apenas com cache em runtime, não copiar dados pra DB própria."
+    }
+  },
+  "format": "BT21 Standard (EN)",
+  "snapshot": {
+    "fetched_at": "2026-05-02",
+    "primary_source": "https://play.limitlesstcg.com/decks?game=DCG&format=standard&set=BT21",
+    "tournaments_analyzed": 101,
+    "players_tracked": 1483,
+    "matches_recorded": 2895,
+    "notes_pt": "Dados puxados do Limitless TCG no recorte BT21 Standard (Booster World Convergence). Decklists exemplares são do top 1 de cada arquetipo no recorte filtrado. Decks BT23 (Hackers' Slumber, ex: Hudiemon, BT23 Jesmon) ainda não estão no formato BT21 Standard EN — saem do escopo desta versão e devem entrar em uma snapshot BT22+ futura."
+  },
+  "tier_legend_pt": {
+    "S": "Pilar do meta — define o que se prepara contra. Alta share + WR sólido.",
+    "A": "Tier competitivo confiável. Top 8 consistente, escolha justificável.",
+    "B": "Rogue ou nicho — pode ganhar torneio na mão certa, mas matchups instáveis.",
+    "C": "Fora do meta competitivo — joga por amor ou tech específico."
+  },
+  "archetypes": [
+    {
+      "id": "royal_knights",
+      "name": "Royal Knights",
+      "name_pt": "Royal Knights (Cavaleiros Reais)",
+      "colors": ["white", "all"],
+      "color_strategy_pt": "Multicolor com base branca; usa King Drasil pra bypassar custos das cores.",
+      "play_style": "midrange-toolbox",
+      "play_style_pt": "Midrange toolbox: rampa cedo via Cool Boy + Omekamon, libera Knights gigantes a custo zero ou 1 com o efeito do King Drasil_7D6 no ovo. Cada Knight tem um ângulo diferente (controle, dano, segurança) — o piloto escolhe a peça certa pro turno.",
+      "tier": "S",
+      "meta_share_pct": 8.23,
+      "win_rate_pct": 53.92,
+      "record": "275-177-58",
+      "key_cards": [
+        { "code": "BT13-007", "name": "King Drasil_7D6", "role": "engine_egg", "note_pt": "Ovo único; reduz custo de Royal Knight em 4 + 1 por material — coração do deck." },
+        { "code": "BT20-102", "name": "Omnimon (X Antibody)", "role": "finisher", "note_pt": "Win condition; nega trash recursion e detona board." },
+        { "code": "BT13-040", "name": "Magnamon", "role": "tempo", "note_pt": "Lv4 que vira Lv6 instantâneo via efeito de Knight." },
+        { "code": "BT13-087", "name": "Dynasmon", "role": "removal", "note_pt": "Mata digimon do oponente ao digivolver — limpa rota pro ataque." },
+        { "code": "BT13-110", "name": "Royal Knights of the Purge", "role": "option", "note_pt": "Option chave; deleta + ganha memória." },
+        { "code": "BT20-100", "name": "The Last Guardian", "role": "option", "note_pt": "Suporte BT20 que sustenta board entre turnos." },
+        { "code": "BT20-091", "name": "Cool Boy", "role": "tamer", "note_pt": "Tamer rampa; baixa cedo pra acelerar King Drasil." },
+        { "code": "BT20-021", "name": "Jesmon GX ACE", "role": "ace", "note_pt": "ACE que protege e fecha jogo — muitas listas rodam 2." }
+      ],
+      "good_matchups": [
+        { "vs": "gallantmon_x", "win_rate_pct": 73.08 },
+        { "vs": "veemon_armor", "win_rate_pct": 59.09 },
+        { "vs": "adventure", "win_rate_pct": 55.17 },
+        { "vs": "blue_green_imperialdramon", "win_rate_pct": 53.57 },
+        { "vs": "sakuyamon", "win_rate_pct": 53.19 }
+      ],
+      "bad_matchups": [
+        { "vs": "purple_hybrid", "win_rate_pct": 36.36 },
+        { "vs": "megidramon", "win_rate_pct": 33.33 },
+        { "vs": "mirror", "win_rate_pct": 35.71 }
+      ],
+      "example_decklist": {
+        "source": "Sebastian Gonzalez [PhoeniX] — 1º de 45, LIGA PHOENIX 2025 PR23 (07/06/2025)",
+        "main": [
+          { "qty": 4, "code": "BT13-040", "name": "Magnamon" },
+          { "qty": 4, "code": "BT20-083", "name": "Omekamon" },
+          { "qty": 4, "code": "BT13-087", "name": "Dynasmon" },
+          { "qty": 3, "code": "BT13-019", "name": "Gankoomon" },
+          { "qty": 3, "code": "BT20-017", "name": "Jesmon" },
+          { "qty": 2, "code": "BT13-075", "name": "Alphamon" },
+          { "qty": 2, "code": "BT13-111", "name": "Gallantmon" },
+          { "qty": 2, "code": "BT19-072", "name": "LordKnightmon" },
+          { "qty": 1, "code": "BT20-056", "name": "Alphamon" },
+          { "qty": 4, "code": "BT20-102", "name": "Omnimon (X Antibody)" },
+          { "qty": 3, "code": "BT13-112", "name": "Omnimon" },
+          { "qty": 2, "code": "BT17-018", "name": "Gallantmon: Crimson Mode ACE" },
+          { "qty": 2, "code": "BT20-060", "name": "Alphamon: Ouryuken ACE" },
+          { "qty": 2, "code": "BT20-021", "name": "Jesmon GX ACE" },
+          { "qty": 4, "code": "BT20-091", "name": "Cool Boy" },
+          { "qty": 4, "code": "BT13-110", "name": "Royal Knights of the Purge" },
+          { "qty": 4, "code": "BT20-100", "name": "The Last Guardian" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "BT13-007", "name": "King Drasil_7D6" }
+        ]
+      },
+      "coach_notes_pt": "Deck mais consistente do BT21. Se alguém te faz 'qual deck devo levar?', a resposta default é Royal Knights até alguém provar o contrário. Pontos de atenção: matchup ruim contra Purple Hybrid (eles deletam suas peças baratas antes de você fechar Drasil) e Megidramon (corrida de aggro purple você perde no tempo). Espelho é super swingy (35%) — quem fechar Drasil primeiro ganha."
+    },
+    {
+      "id": "sakuyamon",
+      "name": "Sakuyamon",
+      "name_pt": "Sakuyamon",
+      "colors": ["yellow", "purple"],
+      "color_strategy_pt": "Yellow primário (linha Renamon), splash purple via X Antibody e suporte de trash.",
+      "play_style": "combo-control",
+      "play_style_pt": "Combo de digivolução vertical com Renamon → Kyubimon → Taomon → Sakuyamon. Roda múltiplas Sakuyamons (BT17, BT19, X Antibody) pra garantir o efeito certo no turno certo. Ganha pela soma de pequenos cliques — não é deck de OTK.",
+      "tier": "S",
+      "meta_share_pct": 7.35,
+      "win_rate_pct": 52.83,
+      "record": "243-178-39",
+      "key_cards": [
+        { "code": "BT17-031", "name": "Renamon", "role": "starter", "note_pt": "Lv3 com search — busca a próxima peça da linha." },
+        { "code": "BT19-034", "name": "Kyubimon", "role": "tempo", "note_pt": "Lv4 que digivolve por baixo (cost reduction) e mantém pressão." },
+        { "code": "BT17-035", "name": "Taomon", "role": "control", "note_pt": "Lv5 que limpa pequenos do oponente — controle de tempo crítico." },
+        { "code": "BT17-038", "name": "Sakuyamon", "role": "finisher", "note_pt": "Lv6 principal — combo de On Play." },
+        { "code": "EX8-037", "name": "Sakuyamon (X Antibody)", "role": "finisher_alt", "note_pt": "Versão X com proteção; entra em listas que esperam matchup contra removal." },
+        { "code": "BT19-083", "name": "Rika Nonaka", "role": "tamer", "note_pt": "Tamer sinérgica — rampa + draw específico da linha Renamon." },
+        { "code": "LM-029", "name": "Yellow Scramble", "role": "option", "note_pt": "Resposta de segurança que viraliza tudo." },
+        { "code": "EX2-003", "name": "Viximon", "role": "egg", "note_pt": "Ovo padrão da linha." }
+      ],
+      "good_matchups": [
+        { "vs": "veemon_armor", "win_rate_pct": 68.75 },
+        { "vs": "gallantmon_x", "win_rate_pct": 63.16 },
+        { "vs": "blue_green_imperialdramon", "win_rate_pct": 62.50 },
+        { "vs": "purple_hybrid", "win_rate_pct": 60.00 }
+      ],
+      "bad_matchups": [
+        { "vs": "royal_knights", "win_rate_pct": 34.04 }
+      ],
+      "example_decklist": {
+        "source": "Matias Angeli [PhoeniX] — 1º de 36, LIGA PHOENIX 2025 PR20 (10/05/2025)",
+        "main": [
+          { "qty": 4, "code": "BT17-031", "name": "Renamon" },
+          { "qty": 3, "code": "EX2-019", "name": "Renamon" },
+          { "qty": 1, "code": "EX8-031", "name": "Renamon (X Antibody)" },
+          { "qty": 4, "code": "BT19-034", "name": "Kyubimon" },
+          { "qty": 2, "code": "EX7-026", "name": "Starmon" },
+          { "qty": 1, "code": "BT18-036", "name": "Wizardmon" },
+          { "qty": 4, "code": "BT17-035", "name": "Taomon" },
+          { "qty": 1, "code": "BT19-037", "name": "Taomon ACE" },
+          { "qty": 2, "code": "BT17-038", "name": "Sakuyamon" },
+          { "qty": 2, "code": "BT19-040", "name": "Sakuyamon" },
+          { "qty": 2, "code": "EX8-037", "name": "Sakuyamon (X Antibody)" },
+          { "qty": 2, "code": "BT20-037", "name": "Chaosmon: Valdur Arm" },
+          { "qty": 2, "code": "EX4-074", "name": "ShineGreymon: Ruin Mode" },
+          { "qty": 4, "code": "BT19-083", "name": "Rika Nonaka" },
+          { "qty": 4, "code": "LM-029", "name": "Yellow Scramble" },
+          { "qty": 4, "code": "P-105", "name": "Physical Training" },
+          { "qty": 3, "code": "EX2-070", "name": "Digivolution Plug-In S" },
+          { "qty": 3, "code": "P-037", "name": "Yellow Memory Boost!" },
+          { "qty": 1, "code": "P-095", "name": "Pause Plug-In P" },
+          { "qty": 1, "code": "ST19-15", "name": "Noble Family Arts" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "EX2-003", "name": "Viximon" }
+        ]
+      },
+      "coach_notes_pt": "Pilar de tier S junto com Royal Knights. Único matchup terrível é Royal Knights (34%) — todos os outros top 8 você bate. Se for jogar competitivo e quer ganhar Royals, montar Sakuyamon não é o caminho; troque por Megidramon ou Purple Hybrid. Fora isso, é o deck mais robusto do meta atual."
+    },
+    {
+      "id": "blue_green_imperialdramon",
+      "name": "Blue Green Imperialdramon",
+      "name_pt": "Imperialdramon Azul/Verde",
+      "colors": ["blue", "green"],
+      "color_strategy_pt": "Azul como cor primária, verde via Davis & Ken pra rampa de memória.",
+      "play_style": "midrange-combo",
+      "play_style_pt": "Linha Veemon + Wormmon → ExVeemon + Stingmon → Paildramon → Imperialdramon. Usa Davis & Ken (BT16) como motor de busca + memória, fechando jogo com Imperialdramon: Fighter Mode ACE.",
+      "tier": "A",
+      "meta_share_pct": 4.72,
+      "win_rate_pct": 51.81,
+      "record": "143-113-20",
+      "key_cards": [
+        { "code": "BT12-021", "name": "Veemon", "role": "starter" },
+        { "code": "BT12-047", "name": "Wormmon", "role": "starter" },
+        { "code": "BT12-022", "name": "ExVeemon", "role": "tempo" },
+        { "code": "BT12-050", "name": "Stingmon", "role": "tempo" },
+        { "code": "BT16-025", "name": "Paildramon", "role": "pivot", "note_pt": "Lv5 fusion — junta as linhas e adianta o Imperialdramon." },
+        { "code": "BT16-027", "name": "Imperialdramon: Fighter Mode ACE", "role": "ace_finisher", "note_pt": "Win condition principal — ataca direto + protege com ACE." },
+        { "code": "BT16-085", "name": "Davis Motomiya & Ken Ichijoji", "role": "tamer", "note_pt": "Tamer dupla de BT16 — busca + memória; coração do engine." },
+        { "code": "BT12-002", "name": "DemiVeemon", "role": "egg" }
+      ],
+      "good_matchups": [
+        { "vs": "purple_hybrid", "win_rate_pct": 69.23 },
+        { "vs": "adventure", "win_rate_pct": 58.82 }
+      ],
+      "bad_matchups": [
+        { "vs": "sakuyamon", "win_rate_pct": 29.17 },
+        { "vs": "vemmon", "win_rate_pct": 33.33 },
+        { "vs": "yellow_vaccine", "win_rate_pct": 38.46 },
+        { "vs": "royal_knights", "win_rate_pct": 42.86 }
+      ],
+      "example_decklist": {
+        "source": "JuanGotz — recorte top BT21 Standard",
+        "main": [
+          { "qty": 4, "code": "BT12-021", "name": "Veemon" },
+          { "qty": 4, "code": "BT12-047", "name": "Wormmon" },
+          { "qty": 4, "code": "P-117", "name": "Veemon" },
+          { "qty": 1, "code": "BT16-040", "name": "Wormmon" },
+          { "qty": 4, "code": "BT12-022", "name": "ExVeemon" },
+          { "qty": 4, "code": "BT12-050", "name": "Stingmon" },
+          { "qty": 1, "code": "EX1-014", "name": "ExVeemon" },
+          { "qty": 1, "code": "ST9-09", "name": "Stingmon" },
+          { "qty": 4, "code": "BT16-025", "name": "Paildramon" },
+          { "qty": 3, "code": "ST9-05", "name": "Paildramon" },
+          { "qty": 2, "code": "BT16-027", "name": "Imperialdramon: Fighter Mode ACE" },
+          { "qty": 2, "code": "BT16-028", "name": "Imperialdramon: Dragon Mode" },
+          { "qty": 2, "code": "ST9-06", "name": "Imperialdramon Dragon Mode" },
+          { "qty": 1, "code": "BT12-031", "name": "Imperialdramon: Fighter Mode" },
+          { "qty": 1, "code": "BT20-020", "name": "Imperialdramon: Fighter Mode" },
+          { "qty": 1, "code": "EX7-023", "name": "Hexeblaumon" },
+          { "qty": 1, "code": "EX8-074", "name": "MedievalGallantmon" },
+          { "qty": 4, "code": "BT16-085", "name": "Davis Motomiya & Ken Ichijoji" },
+          { "qty": 2, "code": "BT3-093", "name": "Davis Motomiya" },
+          { "qty": 2, "code": "BT17-097", "name": "Return to the Primogenitor" },
+          { "qty": 1, "code": "BT3-103", "name": "Hidden Potential Discovered!" },
+          { "qty": 1, "code": "LM-028", "name": "Blue Scramble" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "BT12-002", "name": "DemiVeemon" }
+        ]
+      },
+      "coach_notes_pt": "Engine consistente, mas matchups específicos derretem (Sakuyamon 29%). Bom pra quem gosta de combo de digivolução protegido por ACE. Não é o deck pra jogar contra meta cheio de yellow."
+    },
+    {
+      "id": "purple_hybrid",
+      "name": "Purple Hybrid",
+      "name_pt": "Purple Hybrid (Híbridos Roxos)",
+      "colors": ["purple"],
+      "color_strategy_pt": "Mono purple com pacote denso de Tamers e options de remoção.",
+      "play_style": "control-midrange",
+      "play_style_pt": "Controle midrange. Duskmon BT18 muda a cor base do Digimon do oponente e digivolve em Hybrid (Velgrmon) saindo direto da trash. Loop de Koichi (tamer) + recursão via Mimi e Matt mantém pressão constante. Mata pequenos do oponente em loop.",
+      "tier": "A",
+      "meta_share_pct": 3.78,
+      "win_rate_pct": 55.95,
+      "record": "127-94-6",
+      "key_cards": [
+        { "code": "BT18-078", "name": "Duskmon", "role": "engine", "note_pt": "Lv4 hybrid que muda cor base do oponente e digivolve em Velgrmon da trash." },
+        { "code": "BT18-079", "name": "Velgrmon", "role": "finisher", "note_pt": "Lv5 que loopa Duskmons e fecha jogo controlando recursos." },
+        { "code": "BT7-091", "name": "Koichi Kimura", "role": "tamer", "note_pt": "Tamer principal — draw/discard + pivô da inherited memória." },
+        { "code": "BT18-094", "name": "Koichi Kimura", "role": "tamer_alt", "note_pt": "Versão BT18 — desconto adicional na digivolução de Duskmon." },
+        { "code": "BT16-082", "name": "Ukkomon", "role": "starter" },
+        { "code": "P-040", "name": "Purple Memory Boost!", "role": "option" },
+        { "code": "ST14-12", "name": "Rival's Barrage", "role": "option", "note_pt": "Removal option chave do deck." },
+        { "code": "BT16-006", "name": "Cupimon", "role": "egg" }
+      ],
+      "good_matchups": [
+        { "vs": "leviamon", "win_rate_pct": 88.89 },
+        { "vs": "veemon_armor", "win_rate_pct": 72.73 },
+        { "vs": "megidramon", "win_rate_pct": 72.73 },
+        { "vs": "hunters", "win_rate_pct": 66.67 },
+        { "vs": "gallantmon_x", "win_rate_pct": 64.71 },
+        { "vs": "royal_knights", "win_rate_pct": 54.55 }
+      ],
+      "bad_matchups": [
+        { "vs": "blue_green_imperialdramon", "win_rate_pct": 30.77 },
+        { "vs": "sakuyamon", "win_rate_pct": 36.67 }
+      ],
+      "example_decklist": {
+        "source": "soymarcos — recorte top BT21 Standard",
+        "main": [
+          { "qty": 4, "code": "BT16-082", "name": "Ukkomon" },
+          { "qty": 2, "code": "BT3-077", "name": "Gazimon" },
+          { "qty": 2, "code": "BT8-071", "name": "Psychemon" },
+          { "qty": 2, "code": "ST16-03", "name": "Gabumon" },
+          { "qty": 1, "code": "P-123", "name": "Ukkomon" },
+          { "qty": 4, "code": "BT18-078", "name": "Duskmon" },
+          { "qty": 4, "code": "BT18-079", "name": "Velgrmon" },
+          { "qty": 1, "code": "BT7-073", "name": "KaiserLeomon" },
+          { "qty": 2, "code": "BT21-072", "name": "Arresterdramon: Superior Mode" },
+          { "qty": 2, "code": "BT7-077", "name": "Nidhoggmon" },
+          { "qty": 2, "code": "P-186", "name": "Gallantmon" },
+          { "qty": 1, "code": "BT13-111", "name": "Gallantmon" },
+          { "qty": 4, "code": "BT7-091", "name": "Koichi Kimura" },
+          { "qty": 3, "code": "BT18-094", "name": "Koichi Kimura" },
+          { "qty": 2, "code": "BT3-096", "name": "Mimi Tachikawa" },
+          { "qty": 2, "code": "ST16-14", "name": "Matt Ishida" },
+          { "qty": 1, "code": "EX4-064", "name": "Keenan Crier" },
+          { "qty": 1, "code": "P-130", "name": "Lui Ohwada" },
+          { "qty": 4, "code": "P-040", "name": "Purple Memory Boost!" },
+          { "qty": 4, "code": "ST14-12", "name": "Rival's Barrage" },
+          { "qty": 1, "code": "BT4-111", "name": "Jack Raid" },
+          { "qty": 1, "code": "BT7-107", "name": "Calling From the Darkness" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "BT16-006", "name": "Cupimon" },
+          { "qty": 1, "code": "BT3-006", "name": "DemiMeramon" }
+        ]
+      },
+      "coach_notes_pt": "Win rate de 55,95% é o mais alto entre decks com share decente. É o counter natural de Royal Knights (54,55%). A fraqueza são os decks azuis com proteção (BG Imperialdramon 30%, Sakuyamon 37%). Deck pra quem quer técnico, denso de decisão, e tem paciência pra pilotar — não é fácil."
+    },
+    {
+      "id": "megidramon",
+      "name": "Megidramon",
+      "name_pt": "Megidramon (Guilmon X-Antibody Purple)",
+      "colors": ["purple"],
+      "color_strategy_pt": "Mono purple com linha Guilmon X-Antibody fechando em Megidramon BT21.",
+      "play_style": "aggro-combo",
+      "play_style_pt": "Aggro purple. Linha Guilmon (X Antibody + BT21) → Growlmon X → WarGrowlmon → Megidramon. Wisdom Training + Memory Boost geram tempo enquanto a linha cresce. Fecha jogo cedo com efeito do Megidramon BT21-079.",
+      "tier": "A",
+      "meta_share_pct": 4.38,
+      "win_rate_pct": 51.48,
+      "record": "139-115-16",
+      "key_cards": [
+        { "code": "BT21-064", "name": "Guilmon", "role": "starter" },
+        { "code": "EX8-009", "name": "Guilmon (X Antibody)", "role": "starter_alt" },
+        { "code": "EX8-012", "name": "Growlmon (X Antibody)", "role": "tempo" },
+        { "code": "BT21-068", "name": "Grolwmon", "role": "tempo" },
+        { "code": "BT21-076", "name": "WarGrowlmon", "role": "pivot" },
+        { "code": "BT21-079", "name": "Megidramon", "role": "finisher", "note_pt": "Lv6 carro-chefe; condição de vitória." },
+        { "code": "P-040", "name": "Purple Memory Boost!", "role": "option" },
+        { "code": "P-108", "name": "Wisdom Training", "role": "option" },
+        { "code": "P-177", "name": "Gigimon", "role": "egg" }
+      ],
+      "good_matchups": [
+        { "vs": "gallantmon_x", "win_rate_pct": 62.50 },
+        { "vs": "adventure", "win_rate_pct": 58.82 },
+        { "vs": "royal_knights", "win_rate_pct": 47.62 }
+      ],
+      "bad_matchups": [
+        { "vs": "purple_hybrid", "win_rate_pct": 27.27 }
+      ],
+      "example_decklist": {
+        "source": "Top BT21 Megidra (recorte Limitless)",
+        "main": [
+          { "qty": 4, "code": "EX8-009", "name": "Guilmon (X Antibody)" },
+          { "qty": 4, "code": "BT21-064", "name": "Guilmon" },
+          { "qty": 3, "code": "EX4-006", "name": "Guilmon" },
+          { "qty": 4, "code": "EX8-012", "name": "Growlmon (X Antibody)" },
+          { "qty": 4, "code": "BT21-068", "name": "Grolwmon" },
+          { "qty": 3, "code": "EX3-057", "name": "Growlmon" },
+          { "qty": 4, "code": "BT21-076", "name": "WarGrowlmon" },
+          { "qty": 1, "code": "BT14-076", "name": "SkullGreymon" },
+          { "qty": 3, "code": "BT21-079", "name": "Megidramon" },
+          { "qty": 2, "code": "P-186", "name": "Gallantmon" },
+          { "qty": 2, "code": "EX8-074", "name": "MedievalGallantmon" },
+          { "qty": 1, "code": "BT13-111", "name": "Gallantmon" },
+          { "qty": 4, "code": "P-040", "name": "Purple Memory Boost!" },
+          { "qty": 4, "code": "P-108", "name": "Wisdom Training" },
+          { "qty": 3, "code": "BT1-090", "name": "Gravity Crush" },
+          { "qty": 2, "code": "BT5-106", "name": "Demonic Disaster" },
+          { "qty": 1, "code": "BT7-107", "name": "Calling From the Darkness" },
+          { "qty": 1, "code": "BT4-111", "name": "Jack Raid" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "P-177", "name": "Gigimon" }
+        ]
+      },
+      "coach_notes_pt": "Aggro favorito contra Royal Knights — corre antes do Drasil fechar. Único matchup pesadelo é Purple Hybrid (27%). Pra quem curte decks que fecham jogo no turno 4-5."
+    },
+    {
+      "id": "vemmon",
+      "name": "Vemmon",
+      "name_pt": "Vemmon",
+      "colors": ["black"],
+      "color_strategy_pt": "Mono black com motor de auto-search e digivolução zero-cost.",
+      "play_style": "combo-aggro",
+      "play_style_pt": "Vemmon spam. Joga 12+ Vemmons (BT11, BT18, BT21) que se buscam mutuamente. Snatchmon + Destromon carregam o tempo até Galacticmon BT21-062 fechar. Zenith (tamer) é o brain. Deck rápido e altamente sinérgico.",
+      "tier": "A",
+      "meta_share_pct": 3.30,
+      "win_rate_pct": 56.32,
+      "record": "107-57-26",
+      "key_cards": [
+        { "code": "BT11-061", "name": "Vemmon", "role": "core", "note_pt": "12 cópias na lista — engine de search e tempo." },
+        { "code": "BT18-060", "name": "Vemmon", "role": "core_alt" },
+        { "code": "BT21-056", "name": "Vemmon", "role": "core_alt" },
+        { "code": "BT18-065", "name": "Snatchmon", "role": "tempo" },
+        { "code": "BT21-058", "name": "Snatchmon", "role": "tempo" },
+        { "code": "P-094", "name": "Destromon", "role": "tempo" },
+        { "code": "BT21-062", "name": "Galacticmon", "role": "finisher" },
+        { "code": "BT18-092", "name": "Zenith", "role": "tamer" },
+        { "code": "BT21-006", "name": "Tsumemon", "role": "egg" }
+      ],
+      "good_matchups": [
+        { "vs": "veemon_armor", "win_rate_pct": 77.78 },
+        { "vs": "blue_green_imperialdramon", "win_rate_pct": 46.67 }
+      ],
+      "bad_matchups": [
+        { "vs": "royal_knights", "win_rate_pct": 12.50 }
+      ],
+      "example_decklist": {
+        "source": "onion44 — recorte top BT21 Standard",
+        "main": [
+          { "qty": 12, "code": "BT11-061", "name": "Vemmon" },
+          { "qty": 4, "code": "BT18-060", "name": "Vemmon" },
+          { "qty": 2, "code": "BT21-056", "name": "Vemmon" },
+          { "qty": 4, "code": "BT18-065", "name": "Snatchmon" },
+          { "qty": 4, "code": "BT21-058", "name": "Snatchmon" },
+          { "qty": 4, "code": "P-094", "name": "Destromon" },
+          { "qty": 2, "code": "BT21-060", "name": "Destromon" },
+          { "qty": 4, "code": "BT21-062", "name": "Galacticmon" },
+          { "qty": 3, "code": "BT18-092", "name": "Zenith" },
+          { "qty": 2, "code": "BT21-087", "name": "Zenith" },
+          { "qty": 3, "code": "BT11-105", "name": "Fusionize" },
+          { "qty": 3, "code": "BT21-098", "name": "Ragnarok Cannon" },
+          { "qty": 3, "code": "P-107", "name": "Defense Training" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "BT21-006", "name": "Tsumemon" }
+        ]
+      },
+      "coach_notes_pt": "Win rate de 56% engana — contra Royal Knights perde 12% (Drasil mata todo board barato). Sleeper alta-gain pra metas sem Royal Knights. Se você apareceu num torneio com 30% de Royals na sala, troque o deck."
+    },
+    {
+      "id": "red_phoenixmon",
+      "name": "Red Phoenixmon",
+      "name_pt": "Red Phoenixmon (Guilmon-X / Garudamon-X)",
+      "colors": ["red"],
+      "color_strategy_pt": "Mono red com linha Guilmon X + Garudamon X fechando em Phoenixmon X-Antibody.",
+      "play_style": "midrange-aggro",
+      "play_style_pt": "Red midrange-aggro com tema X-Antibody. Guilmon X (EX8-009) entra cedo, Growlmon X mantém pressão, Garudamon X dá tempo, e Phoenixmon X fecha. X Antibody Proto Form (EX5-070) é a peça-chave que faz a digivolução X-Antibody virar tempo, não desvantagem.",
+      "tier": "B",
+      "meta_share_pct": 1.69,
+      "win_rate_pct": 62.37,
+      "record": "58-26-9",
+      "key_cards": [
+        { "code": "BT21-064", "name": "Guilmon", "role": "starter" },
+        { "code": "EX8-009", "name": "Guilmon (X Antibody)", "role": "starter" },
+        { "code": "EX8-012", "name": "Growlmon (X Antibody)", "role": "tempo" },
+        { "code": "BT16-011", "name": "Garudamon (X Antibody)", "role": "pivot" },
+        { "code": "BT16-015", "name": "Phoenixmon (X Antibody)", "role": "finisher" },
+        { "code": "BT15-017", "name": "Phoenixmon", "role": "finisher_alt" },
+        { "code": "BT9-092", "name": "Cool Boy", "role": "tamer" },
+        { "code": "EX1-066", "name": "Analog Youth", "role": "tamer" },
+        { "code": "EX5-070", "name": "X Antibody Proto Form", "role": "option_engine" },
+        { "code": "EX2-001", "name": "Gigimon", "role": "egg" }
+      ],
+      "good_matchups": [
+        { "vs": "vemmon", "win_rate_pct": 83.33 },
+        { "vs": "adventure", "win_rate_pct": 83.33 },
+        { "vs": "royal_knights", "win_rate_pct": 50.00 },
+        { "vs": "sakuyamon", "win_rate_pct": 50.00 }
+      ],
+      "bad_matchups": [
+        { "vs": "veemon_armor", "win_rate_pct": 30.00 }
+      ],
+      "example_decklist": {
+        "source": "hyomen — recorte top BT21 Standard",
+        "main": [
+          { "qty": 4, "code": "BT21-064", "name": "Guilmon" },
+          { "qty": 4, "code": "EX8-009", "name": "Guilmon (X Antibody)" },
+          { "qty": 2, "code": "EX4-006", "name": "Guilmon" },
+          { "qty": 4, "code": "BT21-068", "name": "Grolwmon" },
+          { "qty": 4, "code": "EX8-012", "name": "Growlmon (X Antibody)" },
+          { "qty": 4, "code": "BT16-011", "name": "Garudamon (X Antibody)" },
+          { "qty": 3, "code": "EX1-006", "name": "Garudamon" },
+          { "qty": 3, "code": "BT16-015", "name": "Phoenixmon (X Antibody)" },
+          { "qty": 2, "code": "BT15-017", "name": "Phoenixmon" },
+          { "qty": 2, "code": "P-186", "name": "Gallantmon" },
+          { "qty": 3, "code": "BT9-092", "name": "Cool Boy" },
+          { "qty": 3, "code": "EX1-066", "name": "Analog Youth" },
+          { "qty": 4, "code": "P-103", "name": "Offense Training" },
+          { "qty": 3, "code": "BT1-090", "name": "Gravity Crush" },
+          { "qty": 3, "code": "EX5-070", "name": "X Antibody Proto Form" },
+          { "qty": 1, "code": "BT7-107", "name": "Calling From the Darkness" },
+          { "qty": 1, "code": "LM-027", "name": "Red Scramble" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "EX2-001", "name": "Gigimon" }
+        ]
+      },
+      "coach_notes_pt": "Win rate de 62% no recorte mais alto do meta, mas sample size pequeno (93 partidas). Não é confiável que esse número se sustente em volume. Joga bem contra Vemmon e Adventure (matchups onde os pequenos do oponente caem fácil pro Garudamon X). Tier B porque share é baixo — pode ser técnico do piloto, não do deck."
+    },
+    {
+      "id": "adventure",
+      "name": "Adventure (Tai & Co.)",
+      "name_pt": "Adventure / DigiDestined",
+      "colors": ["red", "blue", "yellow", "green"],
+      "color_strategy_pt": "Multicolor — cada DigiDestined contribui sua cor; ACEs trancam tempo.",
+      "play_style": "midrange-toolbox",
+      "play_style_pt": "Toolbox baseado nos 8 escolhidos do Adventure ST20/ST21. Cada Lv4-Lv5 traz um corte/utilidade diferente. Fecha com WarGreymon ACE ou MetalGarurumon ACE.",
+      "tier": "B",
+      "meta_share_pct": 6.00,
+      "win_rate_pct": 46.32,
+      "record": "170-161-36",
+      "key_cards": [
+        { "code": "ST20-02", "name": "Biyomon", "role": "starter" },
+        { "code": "ST21-07", "name": "Palmon", "role": "starter" },
+        { "code": "ST20-11", "name": "WarGreymon ACE", "role": "ace_finisher" },
+        { "code": "ST21-11", "name": "MetalGarurumon ACE", "role": "ace_finisher" },
+        { "code": "ST21-13", "name": "Matt Ishida & T.K. Takaishi", "role": "tamer" },
+        { "code": "BT21-102", "name": "Tai Kamiya", "role": "tamer" },
+        { "code": "BT21-061", "name": "MetalGreymon", "role": "tempo" },
+        { "code": "BT21-075", "name": "SkullGreymon", "role": "removal" }
+      ],
+      "good_matchups": [],
+      "bad_matchups": [
+        { "vs": "royal_knights", "win_rate_pct": 44.83 },
+        { "vs": "red_phoenixmon", "win_rate_pct": 16.67 }
+      ],
+      "example_decklist": {
+        "source": "Top Tai & core card (recorte BT21 Standard)",
+        "main": [
+          { "qty": 4, "code": "ST20-02", "name": "Biyomon" },
+          { "qty": 4, "code": "ST21-07", "name": "Palmon" },
+          { "qty": 2, "code": "ST21-10", "name": "Gabumon" },
+          { "qty": 4, "code": "ST20-03", "name": "Birdramon" },
+          { "qty": 4, "code": "ST21-08", "name": "Togemon" },
+          { "qty": 1, "code": "BT21-057", "name": "Greymon" },
+          { "qty": 2, "code": "ST20-06", "name": "Angewomon" },
+          { "qty": 2, "code": "ST20-09", "name": "MegaKabuterimon" },
+          { "qty": 2, "code": "ST21-04", "name": "Zudomon" },
+          { "qty": 2, "code": "ST21-09", "name": "Lillymon" },
+          { "qty": 1, "code": "BT21-061", "name": "MetalGreymon" },
+          { "qty": 1, "code": "BT21-075", "name": "SkullGreymon" },
+          { "qty": 4, "code": "ST21-11", "name": "MetalGarurumon ACE" },
+          { "qty": 2, "code": "ST20-11", "name": "WarGreymon ACE" },
+          { "qty": 3, "code": "ST21-13", "name": "Matt Ishida & T.K. Takaishi" },
+          { "qty": 2, "code": "BT21-102", "name": "Tai Kamiya" },
+          { "qty": 2, "code": "ST20-12", "name": "Sora Takenouchi & Kari Kamiya" },
+          { "qty": 2, "code": "ST20-13", "name": "Tai Kamiya & Izzy Izumi" },
+          { "qty": 2, "code": "ST21-12", "name": "Joe Kido & Mimi Tachikawa" },
+          { "qty": 4, "code": "ST20-14", "name": "Our Courage United" }
+        ],
+        "egg": [
+          { "qty": 4, "code": "ST21-01", "name": "Tsunomon" }
+        ]
+      },
+      "coach_notes_pt": "Deck popular (6% de share), mas perde mais do que ganha (46%). Carrega muita variância: pra ganhar consistente, precisa do match certo (não enfrenta Phoenixmon). Recomendar trocar pra Megidramon ou Sakuyamon se o jogador valoriza WR sobre tema."
+    }
+  ],
+  "out_of_scope_archetypes": {
+    "note_pt": "Arquetipos mencionados em pesquisas mas FORA do recorte BT21 Standard EN atual:",
+    "items": [
+      { "name": "CS Hudiemon", "set": "BT23 Hackers' Slumber (JP/CN)", "status": "Não-legal em BT21 Standard EN; entra em snapshot futura." },
+      { "name": "Red Jesmon (BT23)", "set": "BT23 Hackers' Slumber", "status": "Mesmo motivo acima." },
+      { "name": "Omnimon ACE (lista própria)", "set": "BT21", "status": "Aparece com 0,54% share e 28% WR no recorte — abaixo do limite de inclusão como arquetipo de referência." }
+    ]
+  }
+}
