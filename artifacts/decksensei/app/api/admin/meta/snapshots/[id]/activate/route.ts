@@ -27,21 +27,25 @@ export async function POST(
 
   const { game_id, scope } = snap.rows[0];
 
-  await pool.query("BEGIN");
+  // Transação atômica numa única conexão do pool
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query("BEGIN");
+    await client.query(
       "UPDATE meta_snapshots SET active = false WHERE game_id = $1 AND scope = $2",
       [game_id, scope],
     );
-    await pool.query(
+    await client.query(
       "UPDATE meta_snapshots SET active = true WHERE id = $1",
       [numericId],
     );
-    await pool.query("COMMIT");
+    await client.query("COMMIT");
   } catch (err) {
-    await pool.query("ROLLBACK");
-    console.error("[meta/snapshots/activate]", err);
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[meta/snapshots/activate] transação falhou:", err);
     return Response.json({ error: "Erro ao ativar snapshot." }, { status: 500 });
+  } finally {
+    client.release();
   }
 
   return Response.json({ ok: true, activatedId: numericId });

@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth/admin";
-import { pool, db, promptsTable, eq, and } from "@workspace/db";
+import { pool, db, promptsTable, eq } from "@workspace/db";
 
 export async function POST(
   req: NextRequest,
@@ -30,14 +30,15 @@ export async function POST(
 
   const gameId = existing[0].gameId;
 
-  // Transação: desativa todos do jogo → ativa o selecionado
-  await pool.query("BEGIN");
+  // Transação atômica numa única conexão do pool
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query("BEGIN");
+    await client.query(
       "UPDATE prompts SET active = false WHERE game_id = $1",
       [gameId],
     );
-    await pool.query(
+    await client.query(
       `UPDATE prompts
        SET active = true,
            activated_at = NOW(),
@@ -45,11 +46,13 @@ export async function POST(
        WHERE id = $1`,
       [numericId],
     );
-    await pool.query("COMMIT");
+    await client.query("COMMIT");
   } catch (err) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
     console.error("[prompts/activate] transação falhou:", err);
     return Response.json({ error: "Erro ao ativar prompt." }, { status: 500 });
+  } finally {
+    client.release();
   }
 
   return Response.json({ ok: true, activatedId: numericId });
