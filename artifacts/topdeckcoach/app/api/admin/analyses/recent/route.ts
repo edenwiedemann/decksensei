@@ -27,10 +27,9 @@ export async function GET(req: NextRequest) {
        a.game_id,
        LEFT(a.deck_text, 120)          AS deck_preview,
        COALESCE(a.analysis_text, '')   AS analysis_text,
-       ms.name                         AS archetype_label,
+       a.similar_archetype_id          AS archetype_label,
        a.created_at::text              AS created_at
      FROM analyses a
-     LEFT JOIN meta_archetypes ms ON ms.id = a.similar_archetype_id
      WHERE a.game_id = $1
        AND a.deleted_at IS NULL
        AND a.analysis_text IS NOT NULL

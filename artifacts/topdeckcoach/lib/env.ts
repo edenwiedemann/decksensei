@@ -79,7 +79,7 @@ if (errors.length > 0) {
   const msg = [
     "",
     "╔══════════════════════════════════════════════════════════════╗",
-    "║       TopdeckCoach — erro de configuração no boot            ║",
+    "║       Deck Sensei — erro de configuração no boot             ║",
     "╚══════════════════════════════════════════════════════════════╝",
     "",
     `${errors.length} problema(s) encontrado(s) nas variáveis de ambiente:`,

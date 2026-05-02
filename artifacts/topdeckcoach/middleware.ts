@@ -13,8 +13,8 @@ import { NextRequest, NextResponse } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Permite acesso à página de login sem autenticação
-  if (pathname === "/admin/login") {
+  // Permite acesso à página e API de login sem autenticação
+  if (pathname === "/admin/login" || pathname === "/api/admin/login") {
     return NextResponse.next();
   }
 
