@@ -12,19 +12,12 @@
 import { type NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
+import { db, analysesTable, apiCostsTable } from "@workspace/db";
 import {
-  db,
-  eq,
-  and,
-  gamesTable,
-  promptsTable,
-  metaSnapshotsTable,
-  analysesTable,
-  apiCostsTable,
-} from "@workspace/db";
-import { buildAnalysisPrompt } from "@/lib/analysis-prompt";
+  buildAnalysisPrompt,
+  PromptBuildError,
+} from "@/lib/analysis-prompt";
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
-import type { GameConfigForPrompt } from "@/lib/analysis-prompt";
 
 // ─── Configuração do modelo ───────────────────────────────────────────────────
 
@@ -94,86 +87,26 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  // ── 2. Carrega game, prompt ativo e snapshot ativa em paralelo ──────────────
-  const [gameRows, promptRows, snapshotRows] = await Promise.all([
-    db.select().from(gamesTable).where(eq(gamesTable.id, gameId)).limit(1),
-    db
-      .select()
-      .from(promptsTable)
-      .where(
-        and(eq(promptsTable.gameId, gameId), eq(promptsTable.active, true)),
-      )
-      .limit(1),
-    db
-      .select()
-      .from(metaSnapshotsTable)
-      .where(
-        and(
-          eq(metaSnapshotsTable.gameId, gameId),
-          eq(metaSnapshotsTable.scope, "global"),
-          eq(metaSnapshotsTable.active, true),
-        ),
-      )
-      .limit(1),
-  ]);
-
-  const game = gameRows[0];
-  const prompt = promptRows[0];
-  const snapshot = snapshotRows[0];
-
-  if (!game) {
-    return Response.json({ error: "Jogo não encontrado" }, { status: 404 });
-  }
-  if (!prompt) {
-    return Response.json(
-      { error: "Nenhum prompt ativo para este jogo — configure via /admin/prompts" },
-      { status: 503 },
-    );
-  }
-  if (!snapshot) {
-    return Response.json(
-      { error: "Nenhuma snapshot de meta ativa — configure via /admin/meta" },
-      { status: 503 },
-    );
-  }
-
-  // ── 3. Monta o prompt via lib/analysis-prompt.ts ────────────────────────────
-  const gameConfig: GameConfigForPrompt =
-    typeof game.config === "string"
-      ? (JSON.parse(game.config) as GameConfigForPrompt)
-      : (game.config as GameConfigForPrompt);
-
-  let systemPrompt: string;
-  let userMessage: string;
+  // ── 2. Monta o prompt (carrega game/prompt/snapshot do DB com cache 60 s) ────
+  let built: Awaited<ReturnType<typeof buildAnalysisPrompt>>;
 
   try {
-    const built = buildAnalysisPrompt({
-      gameId,
-      gameName: game.name,
-      gameConfig,
-      systemTemplate: prompt.systemContent,
-      metaSnapshot: snapshot.jsonContent,
-      deck,
-      enrichedCards,
-    });
-    systemPrompt = built.systemPrompt;
-    userMessage = built.userMessage;
+    built = await buildAnalysisPrompt({ gameId, deck, enrichedCards });
   } catch (err) {
     console.error("[analyze] buildAnalysisPrompt falhou:", err);
+    if (err instanceof PromptBuildError) {
+      return Response.json({ error: err.message }, { status: err.statusHint });
+    }
     return Response.json(
       { error: "Erro interno ao montar o prompt" },
       { status: 500 },
     );
   }
 
-  // ── 4. Streaming via Anthropic SDK ──────────────────────────────────────────
-  const anthropic = new Anthropic({
-    // Lê ANTHROPIC_API_KEY automaticamente do ambiente
-  });
+  // ── 3. Streaming via Anthropic SDK ──────────────────────────────────────────
+  const anthropic = new Anthropic();
 
   const analysisId = nanoid(24);
-  const promptVersionId = prompt.id;
-  const metaSnapshotId = snapshot.id;
   const startTime = Date.now();
   const encoder = new TextEncoder();
 
@@ -186,8 +119,8 @@ export async function POST(request: NextRequest) {
           model: CLAUDE_MODEL,
           max_tokens: MAX_TOKENS,
           temperature: TEMPERATURE,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userMessage }],
+          system: built.system,
+          messages: built.messages,
         });
 
         // Encaminha chunks de texto ao client conforme chegam
@@ -220,8 +153,8 @@ export async function POST(request: NextRequest) {
             deckText: deckToText(deck),
             deckParsed: deck as unknown as Record<string, unknown>,
             analysisText: fullText,
-            promptVersionId,
-            metaSnapshotId,
+            promptVersionId: built.promptVersionId,
+            metaSnapshotId: built.metaSnapshotId,
             responseTimeMs,
           });
 

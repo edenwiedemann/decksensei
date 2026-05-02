@@ -952,6 +952,11 @@
   .self-stretch {
     align-self: stretch;
   }
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .overflow-auto {
     overflow: auto;
   }
