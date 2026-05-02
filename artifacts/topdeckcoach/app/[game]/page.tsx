@@ -3,6 +3,7 @@ import { gamesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import DeckInput from "./_components/DeckInput";
+import type { GameConfig } from "@/lib/game-config";
 
 interface GamePageProps {
   params: Promise<{ game: string }>;
@@ -44,6 +45,11 @@ export default async function GamePage({ params }: GamePageProps) {
     DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
   const badgeLabel = GAME_BADGE_LABELS[game] ?? gameData.name;
 
+  const gameConfig: GameConfig =
+    typeof gameData.config === "string"
+      ? JSON.parse(gameData.config)
+      : (gameData.config as GameConfig);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(224,40%,5%)] via-[hsl(224,38%,7%)] to-[hsl(224,35%,10%)]">
       {/* Header */}
@@ -76,7 +82,10 @@ export default async function GamePage({ params }: GamePageProps) {
       {/* Form section */}
       <section className="mx-auto max-w-2xl px-6 pb-24">
         <div className="rounded-xl border border-border/60 bg-card/60 p-6 shadow-xl backdrop-blur-sm">
-          <DeckInput placeholder={placeholder} />
+          <DeckInput
+            placeholder={placeholder}
+            gameConfig={gameData.config as GameConfig}
+          />
         </div>
       </section>
     </div>
