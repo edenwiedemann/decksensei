@@ -1,9 +1,5 @@
-export interface DeckRules {
-  main_deck_size: number;
-  egg_deck_min: number;
-  egg_deck_max: number;
-  max_copies_per_card: number;
-}
+// DeckRules é a fonte canônica em lib/games/types.ts
+export type { DeckRules } from "./games/types";
 
 export interface GameConfig {
   id: string;

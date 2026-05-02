@@ -13,7 +13,6 @@ export interface ParsedCard {
 
 /**
  * Dados brutos de uma carta vindos da API externa do jogo.
- * null quando a carta não foi encontrada ou houve erro na busca.
  */
 export interface CardData {
   cardCode: string;
@@ -39,7 +38,6 @@ export interface EnrichedCard extends ParsedCard {
 
 /**
  * Deck completo com todas as seções enriquecidas.
- * unknownCodes lista os códigos cujo fetch retornou null.
  */
 export interface EnrichedDeck {
   mainDeck: EnrichedCard[];
@@ -49,14 +47,17 @@ export interface EnrichedDeck {
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
 
-export interface ParseResult {
-  /** Cartas do deck principal. */
+/**
+ * Deck estruturado sem os erros de parsing.
+ * É o subconjunto de ParseResult que o validator consome.
+ * EnrichedDeck é estruturalmente compatível (pode ser passado como ParsedDeck).
+ */
+export interface ParsedDeck {
   mainDeck: ParsedCard[];
-  /**
-   * Decks auxiliares indexados por nome (ex: "egg", "side").
-   * Cada jogo pode ter 0 ou mais.
-   */
   auxDecks: Record<string, ParsedCard[]>;
+}
+
+export interface ParseResult extends ParsedDeck {
   /** Erros descritivos em PT para linhas não reconhecidas ou inválidas. */
   errors: string[];
 }
@@ -67,39 +68,43 @@ export interface DeckParser {
 
 // ─── Validator ───────────────────────────────────────────────────────────────
 
-export interface ValidationError {
-  code: string;
-  message_pt: string;
+/**
+ * Regras estruturais de um deck, lidas de games.config.deck_rules.
+ * Nunca hardcodadas no código — vêm sempre do banco.
+ */
+export interface DeckRules {
+  main_deck_size: number;
+  egg_deck_min: number;
+  egg_deck_max: number;
+  max_copies_per_card: number;
 }
 
 export interface ValidationResult {
   valid: boolean;
-  errors: ValidationError[];
-  warnings: ValidationError[];
+  /** Erros que impedem o deck de ser legal para jogo oficial. */
+  errors: string[];
+  /** Avisos sobre possíveis problemas estratégicos ou incomuns. */
+  warnings: string[];
 }
 
 export interface DeckValidator {
-  validate(result: ParseResult): ValidationResult;
+  /**
+   * Valida deck contra regras do jogo.
+   * Aceita tanto ParsedDeck como EnrichedDeck (estruturalmente compatível).
+   * Quando passado EnrichedDeck, avisos adicionais baseados em dados de carta
+   * (ex.: diversidade de cores) também são gerados.
+   */
+  validate(deck: ParsedDeck, rules: DeckRules): ValidationResult;
 }
 
 // ─── Card API ─────────────────────────────────────────────────────────────────
 
 export interface CardAPI {
-  /**
-   * Busca dados de uma carta pelo código.
-   * Retorna null se a carta não for encontrada ou ocorrer erro.
-   * Resultados são cacheados em memória.
-   */
   fetchCard(cardCode: string): Promise<CardData | null>;
-
-  /**
-   * Enriquece uma lista de cartas parseadas buscando dados da API.
-   * Respeita o rate limit do jogo. Erros são silenciosos (data = null).
-   */
   fetchDeck(deck: ParsedCard[]): Promise<EnrichedDeck>;
 }
 
-// ─── Game adapter (agrega tudo) ──────────────────────────────────────────────
+// ─── Game adapter ─────────────────────────────────────────────────────────────
 
 export interface GameAdapter {
   parser: DeckParser;
