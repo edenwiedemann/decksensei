@@ -5,6 +5,7 @@ import type { GameConfig } from "@/lib/game-config";
 
 interface GamePageProps {
   params: Promise<{ game: string }>;
+  searchParams: Promise<{ resume?: string }>;
 }
 
 const DECK_PLACEHOLDERS: Record<string, string> = {
@@ -26,8 +27,10 @@ const GAME_BADGE_LABELS: Record<string, string> = {
   digimon: "Digimon",
 };
 
-export default async function GamePage({ params }: GamePageProps) {
+export default async function GamePage({ params, searchParams }: GamePageProps) {
   const { game } = await params;
+  const { resume } = await searchParams;
+  const autoResume = resume === "true";
 
   // Busca jogo e análise featured em paralelo
   const [gameResults, featuredResults] = await Promise.all([
@@ -105,6 +108,7 @@ export default async function GamePage({ params }: GamePageProps) {
             placeholder={placeholder}
             gameConfig={gameConfig}
             featuredAnalysis={featuredAnalysis}
+            autoResume={autoResume}
           />
         </div>
       </section>

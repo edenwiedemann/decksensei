@@ -10,6 +10,7 @@
  */
 
 import { type NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import Anthropic, {
   APIConnectionError,
   APIConnectionTimeoutError,
@@ -110,6 +111,26 @@ function deckToText(deck: ParsedDeck): string {
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // ── 0. Auth gate ─────────────────────────────────────────────────────────────
+  const cookieStore = await cookies();
+  const isAuthenticated = !!cookieStore.get("session_token")?.value;
+  let shouldSetCountCookie = false;
+
+  if (!isAuthenticated) {
+    const count = parseInt(cookieStore.get("analyses_count")?.value ?? "0", 10);
+    if (count >= 1) {
+      return Response.json(
+        {
+          error: "auth_required",
+          message_pt:
+            "Faz o cadastro com seu email pra continuar — leva 30 segundos.",
+        },
+        { status: 401 },
+      );
+    }
+    shouldSetCountCookie = true;
+  }
+
   // ── 1. Parse e valida o body ────────────────────────────────────────────────
   let gameId: string;
   let deck: ParsedDeck;
@@ -256,13 +277,20 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return new Response(readableStream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-cache, no-store",
-      "X-Analysis-Id": analysisId,
-      "X-Meta-Color-Map": colorMapHeader,
-    },
+  const responseHeaders = new Headers({
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-cache, no-store",
+    "X-Analysis-Id": analysisId,
+    "X-Meta-Color-Map": colorMapHeader,
   });
+
+  if (shouldSetCountCookie) {
+    responseHeaders.set(
+      "Set-Cookie",
+      "analyses_count=1; Path=/; Max-Age=31536000; SameSite=Lax",
+    );
+  }
+
+  return new Response(readableStream, { headers: responseHeaders });
 }

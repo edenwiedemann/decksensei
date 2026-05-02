@@ -42,5 +42,5 @@ export async function verifyAndLogin(formData: FormData): Promise<void> {
     path: "/",
   });
 
-  redirect("/digimon");
+  redirect("/digimon?resume=true");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getParser, getCardAPI, getValidator } from "@/lib/games";
@@ -8,11 +8,13 @@ import type { GameConfig } from "@/lib/game-config";
 import type { EnrichedCard, ParsedCard } from "@/lib/games/types";
 import AnalysisStream from "./AnalysisStream";
 import FeaturedModal from "./FeaturedModal";
+import AuthRequiredModal from "./AuthRequiredModal";
 
 interface DeckInputProps {
   placeholder: string;
   gameConfig: GameConfig;
   featuredAnalysis?: { text: string; playerName: string };
+  autoResume?: boolean;
 }
 
 function sumQty(cards: { quantity: number }[]): number {
@@ -67,11 +69,29 @@ const IDLE: AnalysisState = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DeckInput({ placeholder, gameConfig, featuredAnalysis }: DeckInputProps) {
+export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, autoResume }: DeckInputProps) {
   const [deck, setDeck] = useState("");
   const [analysis, setAnalysis] = useState<AnalysisState>(IDLE);
   const [showFeatured, setShowFeatured] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingResume, setPendingResume] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ── Auto-resume: restaura deck salvo no localStorage após magic-link verify ──
+  useEffect(() => {
+    if (!autoResume) return;
+    try {
+      const saved = localStorage.getItem(`pending_deck_${gameConfig.id}`);
+      if (saved) {
+        setDeck(saved);
+        setPendingResume(true);
+        localStorage.removeItem(`pending_deck_${gameConfig.id}`);
+      }
+    } catch {
+      // localStorage indisponível (SSR, privado) — ignora silenciosamente
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const parsed = useMemo(() => {
     if (!deck.trim()) return null;
@@ -90,6 +110,16 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis }:
     : false;
 
   const isReady = parsed !== null && mainDeckCount >= main_deck_size;
+
+  // ── Dispara análise automaticamente após restaurar o deck ──────────────────
+  useEffect(() => {
+    if (pendingResume && parsed && isReady) {
+      setPendingResume(false);
+      handleAnalyze();
+    }
+  // handleAnalyze é estável via useCallback — ok omitir
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingResume, isReady]);
 
   const mainStatus: "ok" | "low" | "high" =
     !parsed || mainDeckCount === 0
@@ -208,11 +238,24 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis }:
       // Layer 2: erro HTTP do servidor
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const serverMsg = (body as { error?: string } | null)?.error;
+        const bodyTyped = body as { error?: string; message_pt?: string } | null;
+
+        // Caso especial: cadastro necessário para continuar
+        if (res.status === 401 && bodyTyped?.error === "auth_required") {
+          try {
+            localStorage.setItem(`pending_deck_${gameConfig.id}`, deck);
+          } catch {
+            // localStorage indisponível — ignora
+          }
+          setAnalysis(IDLE);
+          setShowAuthModal(true);
+          return;
+        }
+
         setAnalysis({
           phase: "error",
           text: "",
-          error: httpErrorMessage(res.status, serverMsg),
+          error: httpErrorMessage(res.status, bodyTyped?.error),
           validationErrors: [],
           colorMap: {},
           analysisId: "",
@@ -448,6 +491,12 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis }:
           onClose={() => setShowFeatured(false)}
         />
       )}
+
+      {/* Modal de cadastro obrigatório */}
+      <AuthRequiredModal
+        open={showAuthModal}
+        onOpenChange={setShowAuthModal}
+      />
     </div>
   );
 }
