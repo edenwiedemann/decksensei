@@ -16,13 +16,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { upsertUser, updateUserLocation } from "@/lib/db/users";
 import { generateToken } from "@/lib/auth/magic-link";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const RATE_LIMIT = 3;
-const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hora
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -57,11 +54,11 @@ export async function POST(req: NextRequest) {
 
   const normalizedEmail = email.toLowerCase().trim();
 
-  // 2. Rate limit por email
-  const { allowed } = checkRateLimit(
+  // 2. Rate limit por email: 3 requests por hora (Postgres-backed)
+  const { allowed } = await checkRateLimit(
     `magic-link:${normalizedEmail}`,
-    RATE_LIMIT,
-    RATE_WINDOW_MS,
+    3600,
+    3,
   );
 
   if (!allowed) {
