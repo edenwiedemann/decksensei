@@ -33,24 +33,21 @@ function requiredMinLength(name: string, minLength: number): string {
   return value.trim();
 }
 
-function requiredUrl(name: string): string {
-  const value = process.env[name];
+function requiredUrl(name: string, fallbackEnv?: string): string {
+  const value = process.env[name] ?? (fallbackEnv ? process.env[fallbackEnv]?.split(",")[0] : undefined);
   if (!value || value.trim() === "") {
     errors.push(`${name}: variável obrigatória não definida`);
     return "";
   }
   const trimmed = value.trim();
-  if (!trimmed.startsWith("https://")) {
-    errors.push(`${name}: deve ser uma URL válida começando com https://`);
-    return trimmed;
-  }
+  const withScheme = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
   try {
-    new URL(trimmed);
+    new URL(withScheme);
   } catch {
     errors.push(`${name}: URL inválida — "${trimmed}"`);
     return trimmed;
   }
-  return trimmed;
+  return withScheme;
 }
 
 function optionalNumeric(name: string, defaultValue: string): string {
@@ -73,7 +70,7 @@ const DATABASE_URL = required("DATABASE_URL");
 const ANTHROPIC_API_KEY = required("ANTHROPIC_API_KEY");
 const RESEND_API_KEY = required("RESEND_API_KEY");
 const ADMIN_TOKEN = requiredMinLength("ADMIN_TOKEN", 32);
-const APP_URL = requiredUrl("APP_URL");
+const APP_URL = requiredUrl("APP_URL", "REPLIT_DOMAINS");
 const DAILY_COST_CAP_USD = optionalNumeric("DAILY_COST_CAP_USD", "10");
 
 // ─── Falha no boot se houver qualquer problema ───────────────────────────────

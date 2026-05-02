@@ -3,7 +3,7 @@
 
 type AppRoutes = "/" | "/[game]" | "/[game]/a/[id]" | "/admin" | "/admin/analyses" | "/admin/analyses/[id]" | "/admin/feedback" | "/admin/login" | "/admin/meta" | "/admin/meta-recife" | "/admin/meta/[id]" | "/admin/meta/[id]/archetype/[archIdx]/edit" | "/admin/prompts" | "/admin/prompts/[id]/edit" | "/admin/prompts/new" | "/admin/users" | "/admin/users/[id]" | "/auth/verify" | "/obrigado"
 type AppRouteHandlerRoutes = "/api/admin/analyses/[id]/delete" | "/api/admin/analyses/recent" | "/api/admin/card-search" | "/api/admin/featured/set" | "/api/admin/login" | "/api/admin/meta/snapshots" | "/api/admin/meta/snapshots/[id]" | "/api/admin/meta/snapshots/[id]/activate" | "/api/admin/meta/snapshots/[id]/archetypes" | "/api/admin/meta/snapshots/[id]/archetypes/[archIdx]" | "/api/admin/meta/snapshots/[id]/archetypes/[archIdx]/duplicate" | "/api/admin/prompts" | "/api/admin/prompts/[id]/activate" | "/api/admin/prompts/[id]/duplicate" | "/api/admin/prompts/test" | "/api/admin/users/export" | "/api/analyze" | "/api/auth/request-magic-link" | "/api/feedback" | "/api/health"
-type PageRoutes = "/not-found"
+type PageRoutes = never
 type LayoutRoutes = "/"
 type RedirectRoutes = never
 type RewriteRoutes = never
@@ -49,7 +49,6 @@ interface ParamMap {
   "/api/feedback": {}
   "/api/health": {}
   "/auth/verify": {}
-  "/not-found": {}
   "/obrigado": {}
 }
 
