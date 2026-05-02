@@ -26,31 +26,39 @@ import {
   type MetaArchetype,
 } from "@/lib/analysis-prompt";
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // ─── Configuração do modelo ───────────────────────────────────────────────────
 
-/**
- * Verifique em docs.anthropic.com/en/docs/about-claude/models o model string
- * mais recente disponível. Atualizar aqui quando um Sonnet mais novo for
- * lançado — o alias abaixo sempre aponta para o mais recente disponível.
- */
 const CLAUDE_MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 2500;
 const TEMPERATURE = 0.4;
 
-/**
- * Custo aproximado por token para Claude Sonnet (atualizar conforme pricing).
- * Referência: https://www.anthropic.com/pricing
- */
-const INPUT_COST_PER_TOKEN = 3 / 1_000_000; // $3 / MTok
-const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000; // $15 / MTok
+const INPUT_COST_PER_TOKEN = 3 / 1_000_000;
+const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000;
+
+// ─── Rate limit config ────────────────────────────────────────────────────────
+
+const WINDOW_SEC = 3600; // 1 hora
+const LIMIT_ANON = 5;
+const LIMIT_AUTH = 30;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Loga erros do SDK Anthropic com contexto suficiente para diagnóstico.
- * NUNCA expõe detalhes técnicos ao cliente — apenas para os logs do servidor.
- */
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return "unknown";
+}
+
+function formatMinutes(sec: number): string {
+  const m = Math.ceil(sec / 60);
+  return m === 1 ? "1 minuto" : `${m} minutos`;
+}
+
 function logAnthropicError(analysisId: string, err: unknown): void {
   if (err instanceof APIConnectionTimeoutError) {
     console.error(`[analyze][${analysisId}] Anthropic timeout`);
@@ -75,10 +83,6 @@ function logAnthropicError(analysisId: string, err: unknown): void {
   }
 }
 
-/**
- * Extrai o ID do arquetipo mais próximo do texto da análise.
- * Procura o padrão gerado pelo Claude: `Arquetipo mais próximo: **[Nome]** — similaridade aproximada **X%**.`
- */
 function extractSimilarArchetype(
   text: string,
   archetypes: MetaArchetype[],
@@ -91,7 +95,6 @@ function extractSimilarArchetype(
   return archetypes.find((a) => a.name === name || a.name_pt === name)?.id ?? null;
 }
 
-/** Reconstrói texto legível da decklist a partir do ParsedDeck para armazenar. */
 function deckToText(deck: ParsedDeck): string {
   const lines: string[] = deck.mainDeck.map(
     (c) => `${c.quantity} ${c.cardCode}${c.cardName ? ` ${c.cardName}` : ""}`,
@@ -111,9 +114,41 @@ function deckToText(deck: ParsedDeck): string {
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  // ── 0. Auth gate ─────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
   const isAuthenticated = !!cookieStore.get("session_token")?.value;
+
+  // ── 0. Rate limiting ──────────────────────────────────────────────────────
+  const ip = getClientIp(request);
+  const rateLimitKey = isAuthenticated ? `auth:${ip}` : `anon:${ip}`;
+  const maxRequests = isAuthenticated ? LIMIT_AUTH : LIMIT_ANON;
+
+  let rlResult: Awaited<ReturnType<typeof checkRateLimit>>;
+  try {
+    rlResult = await checkRateLimit(rateLimitKey, WINDOW_SEC, maxRequests);
+  } catch (err) {
+    // Se o check falhar (DB down, etc.) deixa passar — não bloqueia o usuário
+    console.error("[analyze] rate limit check falhou:", err);
+    rlResult = { allowed: true };
+  }
+
+  if (!rlResult.allowed) {
+    const retryAfterSec = rlResult.retryAfterSec;
+    return Response.json(
+      {
+        error: "rate_limit",
+        message_pt: `Limite de análises atingido — tente novamente em ${formatMinutes(retryAfterSec)}.`,
+        retryAfterSec,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfterSec),
+        },
+      },
+    );
+  }
+
+  // ── 1. Auth gate ──────────────────────────────────────────────────────────
   let shouldSetCountCookie = false;
 
   if (!isAuthenticated) {
@@ -131,7 +166,7 @@ export async function POST(request: NextRequest) {
     shouldSetCountCookie = true;
   }
 
-  // ── 1. Parse e valida o body ────────────────────────────────────────────────
+  // ── 2. Parse e valida o body ────────────────────────────────────────────
   let gameId: string;
   let deck: ParsedDeck;
   let enrichedCards: EnrichedCard[];
@@ -159,7 +194,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  // ── 1b. Validação estrutural mínima do deck ──────────────────────────────────
+  // ── 2b. Validação estrutural mínima do deck ────────────────────────────
   if (!deck.mainDeck || deck.mainDeck.length === 0) {
     return Response.json(
       {
@@ -171,7 +206,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2. Monta o prompt (carrega game/prompt/snapshot do DB com cache 60 s) ────
+  // ── 3. Monta o prompt ─────────────────────────────────────────────────
   let built: Awaited<ReturnType<typeof buildAnalysisPrompt>>;
 
   try {
@@ -187,14 +222,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2b. Mapa de cores dos arquetipos para o frontend ────────────────────────
+  // ── 3b. Mapa de cores dos arquetipos para o frontend ──────────────────
   const colorMap: Record<string, string> = {};
   for (const arch of built.archetypes) {
     if (arch.colors[0]) colorMap[arch.name_pt] = arch.colors[0];
   }
   const colorMapHeader = encodeURIComponent(JSON.stringify(colorMap));
 
-  // ── 3. Streaming via Anthropic SDK ──────────────────────────────────────────
+  // ── 4. Streaming via Anthropic SDK ────────────────────────────────────
   const anthropic = new Anthropic();
 
   const analysisId = nanoid(24);
@@ -214,7 +249,6 @@ export async function POST(request: NextRequest) {
           messages: built.messages,
         });
 
-        // Encaminha chunks de texto ao client conforme chegam
         for await (const event of stream) {
           if (
             event.type === "content_block_delta" &&
@@ -226,7 +260,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Recupera tokens reais após o stream terminar
         const finalMessage = await stream.finalMessage();
         const responseTimeMs = Date.now() - startTime;
         const inputTokens = finalMessage.usage.input_tokens;
@@ -236,7 +269,7 @@ export async function POST(request: NextRequest) {
           outputTokens * OUTPUT_COST_PER_TOKEN
         ).toFixed(6);
 
-        // ── 5. Persiste análise e custo no DB (best-effort) ─────────────────
+        // ── 5. Persiste análise e custo no DB (best-effort) ───────────
         try {
           const similarArchetypeId = extractSimilarArchetype(
             fullText,
@@ -262,13 +295,10 @@ export async function POST(request: NextRequest) {
             costUsd,
           });
         } catch (dbErr) {
-          // Não fecha o stream — cliente já recebeu a análise completa
           console.error("[analyze] falha ao salvar no DB:", dbErr);
         }
       } catch (err) {
         logAnthropicError(analysisId, err);
-        // Fecha o stream com erro — o cliente receberá um DOMException na leitura
-        // e exibirá mensagem genérica amigável (nunca expõe detalhes técnicos)
         controller.error(new Error("stream_error"));
         return;
       }

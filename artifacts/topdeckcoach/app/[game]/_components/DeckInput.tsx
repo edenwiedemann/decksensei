@@ -29,7 +29,7 @@ function httpErrorMessage(status: number, serverMessage?: string): string {
       serverMessage ?? "Verifica os problemas no deck antes de analisar."
     );
   }
-  if (status === 503 || status === 429) {
+  if (status === 503) {
     return "A análise está temporariamente indisponível — aguarda um instante e tenta de novo.";
   }
   if (status === 404) {
@@ -56,6 +56,11 @@ interface AnalysisState {
   colorMap: Record<string, string>;
   /** ID da análise salva no DB (nanoid 24), vindo do header X-Analysis-Id. */
   analysisId: string;
+  /**
+   * Quando > 0: resposta 429 — número de segundos até a janela de rate limit
+   * expirar. O componente exibe countdown e bloqueia novo envio.
+   */
+  retryAfterSec: number;
 }
 
 const IDLE: AnalysisState = {
@@ -65,6 +70,7 @@ const IDLE: AnalysisState = {
   validationErrors: [],
   colorMap: {},
   analysisId: "",
+  retryAfterSec: 0,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -75,6 +81,10 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
   const [showFeatured, setShowFeatured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingResume, setPendingResume] = useState(false);
+
+  /** Segundos restantes no countdown de rate limit — decrementado a cada 1s. */
+  const [countdownSec, setCountdownSec] = useState(0);
+
   const abortRef = useRef<AbortController | null>(null);
 
   // ── Auto-resume: restaura deck salvo no localStorage após magic-link verify ──
@@ -92,6 +102,29 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Countdown de rate limit ───────────────────────────────────────────────
+  useEffect(() => {
+    if (analysis.retryAfterSec <= 0) {
+      setCountdownSec(0);
+      return;
+    }
+    setCountdownSec(analysis.retryAfterSec);
+
+    const interval = setInterval(() => {
+      setCountdownSec((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Limpa o estado de rate limit para liberar o botão
+          setAnalysis(IDLE);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [analysis.retryAfterSec]);
 
   const parsed = useMemo(() => {
     if (!deck.trim()) return null;
@@ -160,19 +193,16 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
 
     if (!validation.valid) {
       setAnalysis({
+        ...IDLE,
         phase: "error",
-        text: "",
-        error: "",
         validationErrors: validation.errors,
-        colorMap: {},
-        analysisId: "",
       });
       return;
     }
 
     try {
       // ── Enriquecer cartas via API externa ─────────────────────────────
-      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [], colorMap: {}, analysisId: "" });
+      setAnalysis({ ...IDLE, phase: "enriching" });
 
       const allCards: ParsedCard[] = [
         ...parsed.mainDeck,
@@ -207,7 +237,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       }));
 
       // ── Streaming da análise via /api/analyze ─────────────────────────
-      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [], colorMap: {}, analysisId: "" });
+      setAnalysis({ ...IDLE, phase: "streaming" });
 
       // Layer 1: erro de rede na requisição inicial
       let res: Response;
@@ -225,12 +255,9 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       } catch (fetchErr) {
         if ((fetchErr as { name?: string }).name === "AbortError") return;
         setAnalysis({
+          ...IDLE,
           phase: "error",
-          text: "",
           error: "Não consegui conectar agora — tenta de novo em alguns segundos.",
-          validationErrors: [],
-          colorMap: {},
-          analysisId: "",
         });
         return;
       }
@@ -238,9 +265,13 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       // Layer 2: erro HTTP do servidor
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const bodyTyped = body as { error?: string; message_pt?: string } | null;
+        const bodyTyped = body as {
+          error?: string;
+          message_pt?: string;
+          retryAfterSec?: number;
+        } | null;
 
-        // Caso especial: cadastro necessário para continuar
+        // 401: cadastro necessário
         if (res.status === 401 && bodyTyped?.error === "auth_required") {
           try {
             localStorage.setItem(`pending_deck_${gameConfig.id}`, deck);
@@ -252,25 +283,33 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           return;
         }
 
+        // 429: rate limit — inicia countdown
+        if (res.status === 429) {
+          const retryAfterSec =
+            bodyTyped?.retryAfterSec ??
+            parseInt(res.headers.get("Retry-After") ?? "60", 10);
+          setAnalysis({
+            ...IDLE,
+            phase: "error",
+            error: bodyTyped?.message_pt ?? "Limite de análises atingido — tente de novo em instantes.",
+            retryAfterSec,
+          });
+          return;
+        }
+
         setAnalysis({
+          ...IDLE,
           phase: "error",
-          text: "",
           error: httpErrorMessage(res.status, bodyTyped?.error),
-          validationErrors: [],
-          colorMap: {},
-          analysisId: "",
         });
         return;
       }
 
       if (!res.body) {
         setAnalysis({
+          ...IDLE,
           phase: "error",
-          text: "",
           error: "Resposta inesperada do servidor — tenta de novo.",
-          validationErrors: [],
-          colorMap: {},
-          analysisId: "",
         });
         return;
       }
@@ -298,30 +337,27 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           return;
         }
         fullText += decoder.decode(value, { stream: true });
-        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [], colorMap, analysisId });
+        setAnalysis({ ...IDLE, phase: "streaming", text: fullText, colorMap, analysisId });
       }
 
-      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [], colorMap, analysisId });
+      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId });
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
-      // Layer 1: erro de stream (conexão caiu durante a leitura)
       console.error("[analyze]", err);
       setAnalysis({
+        ...IDLE,
         phase: "error",
-        text: "",
         error: "A conexão caiu no meio da análise — tenta de novo em alguns segundos.",
-        validationErrors: [],
-        colorMap: {},
-        analysisId: "",
       });
     }
-  }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules]);
+  }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules, deck]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
   const { phase } = analysis;
   const isAnalyzing = phase === "enriching" || phase === "streaming";
   const showStream = phase === "streaming" || phase === "done";
+  const isRateLimited = phase === "error" && analysis.retryAfterSec > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -439,10 +475,28 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         </div>
       )}
 
+      {/* Rate limit — mensagem + countdown */}
+      {isRateLimited && (
+        <div className="rounded-lg border border-orange-500/25 bg-orange-500/5 px-4 py-3">
+          <p className="text-xs font-medium text-orange-400/90">
+            {analysis.error}
+          </p>
+          {countdownSec > 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Liberando em{" "}
+              <span className="tabular-nums font-semibold text-orange-300/80">
+                {formatCountdown(countdownSec)}
+              </span>
+              …
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Botão Analisar / erro de conexão ou servidor */}
       {(phase === "idle" || phase === "error") && (
         <>
-          {phase === "error" && analysis.error && (
+          {phase === "error" && analysis.error && !isRateLimited && (
             <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive/80">
               {analysis.error}
             </p>
@@ -450,11 +504,17 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Button
               size="lg"
-              disabled={!isReady}
+              disabled={!isReady || isRateLimited}
               className="w-full sm:w-auto"
               onClick={handleAnalyze}
             >
-              {phase === "error" ? "Tentar de novo" : "Analisar deck"}
+              {isRateLimited
+                ? countdownSec > 0
+                  ? `Aguarde ${formatCountdown(countdownSec)}`
+                  : "Analisar deck"
+                : phase === "error"
+                  ? "Tentar de novo"
+                  : "Analisar deck"}
             </Button>
             {phase === "idle" && featuredAnalysis && (
               <button
@@ -499,6 +559,18 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       />
     </div>
   );
+}
+
+// ─── Helpers de UI ────────────────────────────────────────────────────────────
+
+/** Formata segundos como mm:ss ou Xs */
+function formatCountdown(sec: number): string {
+  if (sec >= 60) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+  return `${sec}s`;
 }
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
