@@ -99,7 +99,7 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
       <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-3 backdrop-blur-sm border-b border-border/40">
-        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
+        <img src="/logo.png" alt="" className="h-8 w-auto" style={{ mixBlendMode: "screen" }} />
         <a
           href={`/${game}`}
           className="text-base font-semibold tracking-tight text-foreground hover:text-primary transition-colors"

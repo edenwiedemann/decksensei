@@ -75,7 +75,12 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
       <header className="sticky top-0 z-50 flex items-center gap-3 px-6 py-3 backdrop-blur-sm border-b border-border/40">
-        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
+        <img
+          src="/logo.png"
+          alt=""
+          className="h-8 w-auto"
+          style={{ mixBlendMode: "screen" }}
+        />
         <span className="text-base font-semibold tracking-tight text-foreground">
           Deck Sensei
         </span>
@@ -89,9 +94,10 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
         <div className="mx-auto max-w-3xl">
           {/* Logo */}
           <img
-            src="/logo-transparent.png"
+            src="/logo.png"
             alt="Deck Sensei"
-            className="mx-auto mb-8 h-36 w-auto drop-shadow-[0_0_40px_rgba(78,107,255,0.35)]"
+            className="mx-auto mb-6 h-52 w-auto"
+            style={{ mixBlendMode: "screen" }}
           />
 
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">

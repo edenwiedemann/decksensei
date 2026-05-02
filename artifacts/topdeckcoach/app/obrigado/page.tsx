@@ -63,7 +63,7 @@ export default async function ObrigadoPage({ searchParams }: ObrigadoPageProps) 
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6 py-16">
       {/* Header */}
       <header className="mb-16 flex items-center gap-3">
-        <img src="/logo-transparent.png" alt="" className="h-8 w-auto" />
+        <img src="/logo.png" alt="" className="h-8 w-auto" style={{ mixBlendMode: "screen" }} />
         <Link
           href="/digimon"
           className="text-base font-semibold tracking-tight text-foreground hover:text-primary transition-colors"

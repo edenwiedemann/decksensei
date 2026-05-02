@@ -46,7 +46,7 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)] px-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/logo-transparent.png" alt="Deck Sensei" className="mx-auto mb-4 h-16 w-auto" />
+          <img src="/logo.png" alt="Deck Sensei" className="mx-auto mb-4 h-20 w-auto" style={{ mixBlendMode: "screen" }} />
           <p className="text-xs uppercase tracking-widest text-muted-foreground/60">
             Deck Sensei
           </p>
