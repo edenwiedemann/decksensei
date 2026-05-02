@@ -13,6 +13,7 @@ import {
   FileText,
   type LucideIcon,
 } from "lucide-react";
+import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
 
 // ─── Configuração das seções ──────────────────────────────────────────────────
 
@@ -306,12 +307,71 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
   const Icon = meta.icon;
   const showCursor = isLast && streaming;
 
-  // Seção de comparação: tenta renderizar card especial quando o conteúdo está completo
   const isComparison = section.title === "Comparação com o meta";
+  const isSuggestions = section.title === "Sugestões de troca";
+
   const comparison = isComparison ? parseComparison(section.content) : null;
-  const archetypeColor = comparison
-    ? colorMap[comparison.archetypeName]
-    : undefined;
+  const archetypeColor = comparison ? colorMap[comparison.archetypeName] : undefined;
+
+  // Para sugestões: só renderiza o card especial quando o stream terminou
+  // (assim o bloco ```sugestoes``` está completo e parseável)
+  const suggestions = isSuggestions && !streaming
+    ? parseSuggestionsBlock(section.content)
+    : null;
+
+  function renderContent() {
+    if (!section.content.trim()) {
+      return (
+        <div className="flex items-center gap-2 py-2">
+          {showCursor ? (
+            <span className="h-3.5 w-0.5 animate-pulse bg-primary/60" />
+          ) : (
+            <span className="text-xs text-muted-foreground/40 italic">carregando...</span>
+          )}
+        </div>
+      );
+    }
+
+    // Seção de sugestões com card especial (stream terminou + parse ok)
+    if (isSuggestions && suggestions) {
+      return <SuggestionsCard suggestions={suggestions} />;
+    }
+
+    // Seção de sugestões ainda streamando — mostra markdown puro (inclui o JSON bruto)
+    // e um indicador de "montando..."
+    if (isSuggestions && streaming) {
+      return (
+        <div className="flex items-center gap-2 py-3">
+          <span className="h-3.5 w-0.5 animate-pulse bg-primary/60" />
+          <span className="text-xs text-muted-foreground/50 italic">montando sugestões...</span>
+        </div>
+      );
+    }
+
+    // Seção de comparação com card especial
+    if (isComparison && comparison) {
+      return (
+        <div className="flex flex-col gap-4">
+          <ComparisonCard comparison={comparison} archetypeColor={archetypeColor} />
+          {streaming && (
+            <div className="text-xs text-muted-foreground/50 italic">analisando...</div>
+          )}
+        </div>
+      );
+    }
+
+    // Markdown padrão para todas as outras seções
+    return (
+      <>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+          {section.content}
+        </ReactMarkdown>
+        {showCursor && (
+          <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse align-middle bg-primary/60" />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border border-border/50 bg-card">
@@ -328,46 +388,7 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
       </div>
 
       {/* Content */}
-      <div className="px-5 py-5">
-        {section.content.trim() ? (
-          <>
-            {/* Card destacado de comparação — mostra quando o parser consegue extrair dados */}
-            {isComparison && comparison ? (
-              <div className="flex flex-col gap-4">
-                <ComparisonCard
-                  comparison={comparison}
-                  archetypeColor={archetypeColor}
-                />
-                {/* Fallback: mostra blockquote original acima do card durante stream */}
-                {streaming && (
-                  <div className="text-xs text-muted-foreground/50 italic">
-                    analisando...
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-                  {section.content}
-                </ReactMarkdown>
-                {showCursor && (
-                  <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse align-middle bg-primary/60" />
-                )}
-              </>
-            )}
-          </>
-        ) : (
-          <div className="flex items-center gap-2 py-2">
-            {showCursor ? (
-              <span className="h-3.5 w-0.5 animate-pulse bg-primary/60" />
-            ) : (
-              <span className="text-xs text-muted-foreground/40 italic">
-                carregando...
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      <div className="px-5 py-5">{renderContent()}</div>
     </div>
   );
 }
