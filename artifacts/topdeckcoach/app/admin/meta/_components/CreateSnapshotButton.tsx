@@ -17,9 +17,17 @@ interface Props {
   gameId: string;
   activeSnapshotId: number | null;
   activeSnapshotVersion: string | null;
+  scope?: "global" | "local";
+  redirectBase?: string;
 }
 
-export default function CreateSnapshotButton({ gameId, activeSnapshotId, activeSnapshotVersion }: Props) {
+export default function CreateSnapshotButton({
+  gameId,
+  activeSnapshotId,
+  activeSnapshotVersion,
+  scope = "global",
+  redirectBase = "/admin/meta",
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [version, setVersion] = useState("");
@@ -53,6 +61,7 @@ export default function CreateSnapshotButton({ gameId, activeSnapshotId, activeS
           version: version.trim(),
           notes: notes.trim() || undefined,
           copyFromId: activeSnapshotId ?? undefined,
+          scope,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; id?: number };
@@ -60,7 +69,7 @@ export default function CreateSnapshotButton({ gameId, activeSnapshotId, activeS
         setError(data.error ?? `Erro HTTP ${res.status}`);
       } else {
         setOpen(false);
-        router.push(`/admin/meta/${data.id}`);
+        router.push(`${redirectBase}/${data.id}`);
       }
     } catch {
       setError("Erro de rede. Tente novamente.");

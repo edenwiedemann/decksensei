@@ -110,6 +110,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/admin/meta-recife/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/admin/meta-recife">> = Specific
+  const handler = {} as typeof import("../../app/admin/meta-recife/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/admin/meta/[id]/archetype/[archIdx]/edit/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/admin/meta/[id]/archetype/[archIdx]/edit">> = Specific

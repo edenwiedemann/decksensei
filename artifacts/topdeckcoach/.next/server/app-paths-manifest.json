@@ -1,6 +1,4 @@
 {
   "/[game]/page": "app/[game]/page.js",
-  "/admin/meta/page": "app/admin/meta/page.js",
-  "/admin/meta/[id]/page": "app/admin/meta/[id]/page.js",
-  "/admin/meta/[id]/archetype/[archIdx]/edit/page": "app/admin/meta/[id]/archetype/[archIdx]/edit/page.js"
+  "/admin/meta-recife/page": "app/admin/meta-recife/page.js"
 }

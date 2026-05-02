@@ -9,6 +9,7 @@ interface CreateBody {
   version?: string;
   notes?: string;
   copyFromId?: number;
+  scope?: "global" | "local";
 }
 
 export async function POST(req: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Body inválido." }, { status: 400 });
   }
 
-  const { gameId = "digimon", version, notes, copyFromId } = body;
+  const { gameId = "digimon", version, notes, copyFromId, scope = "global" } = body;
 
   if (!version?.trim()) {
     return Response.json({ error: "version é obrigatório." }, { status: 400 });
@@ -51,9 +52,9 @@ export async function POST(req: NextRequest) {
 
   const r = await pool.query<{ id: number }>(
     `INSERT INTO meta_snapshots (game_id, version, json_content, notes, scope, active)
-     VALUES ($1, $2, $3, $4, 'global', false)
+     VALUES ($1, $2, $3, $4, $5, false)
      RETURNING id`,
-    [gameId, version.trim(), JSON.stringify(jsonContent), notes?.trim() ?? null],
+    [gameId, version.trim(), JSON.stringify(jsonContent), notes?.trim() ?? null, scope],
   );
 
   return Response.json({ ok: true, id: r.rows[0].id });

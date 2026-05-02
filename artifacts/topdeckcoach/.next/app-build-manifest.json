@@ -50,6 +50,11 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/admin/meta/[id]/archetype/[archIdx]/edit/page.js"
+    ],
+    "/admin/meta-recife/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/meta-recife/page.js"
     ]
   }
 }
