@@ -409,9 +409,6 @@
   .my-3 {
     margin-block: calc(var(--spacing) * 3);
   }
-  .my-4 {
-    margin-block: calc(var(--spacing) * 4);
-  }
   .-mt-4 {
     margin-top: calc(var(--spacing) * -4);
   }
@@ -435,9 +432,6 @@
   }
   .mt-6 {
     margin-top: calc(var(--spacing) * 6);
-  }
-  .mt-7 {
-    margin-top: calc(var(--spacing) * 7);
   }
   .mt-10 {
     margin-top: calc(var(--spacing) * 10);
@@ -528,9 +522,6 @@
   }
   .hidden {
     display: none;
-  }
-  .inline {
-    display: inline;
   }
   .inline-block {
     display: inline-block;
@@ -1018,13 +1009,6 @@
   .gap-10 {
     gap: calc(var(--spacing) * 10);
   }
-  .space-y-1 {
-    :where(& > :not(:last-child)) {
-      --tw-space-y-reverse: 0;
-      margin-block-start: calc(calc(var(--spacing) * 1) * var(--tw-space-y-reverse));
-      margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));
-    }
-  }
   .space-y-1\.5 {
     :where(& > :not(:last-child)) {
       --tw-space-y-reverse: 0;
@@ -1296,22 +1280,10 @@
       border-color: color-mix(in oklab, hsl(var(--primary)) 10%, transparent);
     }
   }
-  .border-primary\/15 {
-    border-color: hsl(var(--primary));
-    @supports (color: color-mix(in lab, red, red)) {
-      border-color: color-mix(in oklab, hsl(var(--primary)) 15%, transparent);
-    }
-  }
   .border-primary\/20 {
     border-color: hsl(var(--primary));
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, hsl(var(--primary)) 20%, transparent);
-    }
-  }
-  .border-primary\/25 {
-    border-color: hsl(var(--primary));
-    @supports (color: color-mix(in lab, red, red)) {
-      border-color: color-mix(in oklab, hsl(var(--primary)) 25%, transparent);
     }
   }
   .border-primary\/40 {
@@ -1781,9 +1753,6 @@
   .pr-8 {
     padding-right: calc(var(--spacing) * 8);
   }
-  .pb-2 {
-    padding-bottom: calc(var(--spacing) * 2);
-  }
   .pb-3 {
     padding-bottom: calc(var(--spacing) * 3);
   }
@@ -1859,9 +1828,6 @@
   }
   .text-\[0\.8rem\] {
     font-size: 0.8rem;
-  }
-  .text-\[0\.875rem\] {
-    font-size: 0.875rem;
   }
   .text-\[9px\] {
     font-size: 9px;
@@ -2037,12 +2003,6 @@
     color: hsl(var(--primary));
     @supports (color: color-mix(in lab, red, red)) {
       color: color-mix(in oklab, hsl(var(--primary)) 60%, transparent);
-    }
-  }
-  .text-primary\/70 {
-    color: hsl(var(--primary));
-    @supports (color: color-mix(in lab, red, red)) {
-      color: color-mix(in oklab, hsl(var(--primary)) 70%, transparent);
     }
   }
   .text-purple-400 {
