@@ -41,7 +41,7 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
     db
       .select({
         analysisText: analysesTable.analysisText,
-        adminNote: analysesTable.adminNote,
+        featuredPlayerName: analysesTable.featuredPlayerName,
       })
       .from(analysesTable)
       .where(
@@ -68,7 +68,7 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
       : (gameData.config as GameConfig);
 
   const featuredAnalysis = featured
-    ? { text: featured.analysisText, playerName: featured.adminNote ?? "filho" }
+    ? { text: featured.analysisText, playerName: featured.featuredPlayerName ?? "jogador" }
     : undefined;
 
   return (

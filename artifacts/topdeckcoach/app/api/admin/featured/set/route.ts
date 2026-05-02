@@ -13,10 +13,10 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Body inválido." }, { status: 400 });
   }
 
-  const { gameId, analysisId, playerName } = body as {
+  const { gameId, analysisId, featuredPlayerName } = body as {
     gameId?: string;
     analysisId?: string;
-    playerName?: string;
+    featuredPlayerName?: string;
   };
 
   if (!gameId || !analysisId) {
@@ -32,12 +32,12 @@ export async function POST(req: NextRequest) {
     .set({ isFeatured: false })
     .where(eq(analysesTable.gameId, gameId));
 
-  // 2. Marca a análise específica como featured + salva nome do jogador
+  // 2. Marca a análise específica como featured + salva nome do jogador no campo dedicado
   await db
     .update(analysesTable)
     .set({
       isFeatured: true,
-      adminNote: playerName?.trim() || null,
+      featuredPlayerName: featuredPlayerName?.trim() || null,
     })
     .where(
       and(

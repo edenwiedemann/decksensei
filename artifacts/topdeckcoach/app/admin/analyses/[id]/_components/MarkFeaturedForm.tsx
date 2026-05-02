@@ -7,17 +7,17 @@ import { Star, Check, Loader2 } from "lucide-react";
 interface MarkFeaturedFormProps {
   gameId: string;
   analysisId: string;
-  currentPlayerName: string;
+  currentFeaturedPlayerName: string;
   isFeatured: boolean;
 }
 
 export default function MarkFeaturedForm({
   gameId,
   analysisId,
-  currentPlayerName,
+  currentFeaturedPlayerName,
   isFeatured,
 }: MarkFeaturedFormProps) {
-  const [playerName, setPlayerName] = useState(currentPlayerName);
+  const [featuredPlayerName, setFeaturedPlayerName] = useState(currentFeaturedPlayerName);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -30,7 +30,7 @@ export default function MarkFeaturedForm({
       const res = await fetch("/api/admin/featured/set", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId, analysisId, playerName: playerName.trim() }),
+        body: JSON.stringify({ gameId, analysisId, featuredPlayerName: featuredPlayerName.trim() }),
       });
 
       if (!res.ok) {
@@ -49,15 +49,17 @@ export default function MarkFeaturedForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 min-w-[260px]">
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-muted-foreground" htmlFor="playerName">
+        <label className="text-xs text-muted-foreground" htmlFor="featuredPlayerName">
           Nome do jogador (aparece na nota de exemplo)
         </label>
         <input
-          id="playerName"
+          id="featuredPlayerName"
           type="text"
-          value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
-          placeholder="ex: Eden"
+          maxLength={100}
+          required
+          value={featuredPlayerName}
+          onChange={(e) => setFeaturedPlayerName(e.target.value)}
+          placeholder="Nome do jogador (ex: nome do meu filho)"
           className="h-8 rounded-md border border-border/40 bg-muted/20 px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-border focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>

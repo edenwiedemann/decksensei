@@ -36,6 +36,7 @@ export const analysesTable = pgTable(
     similarArchetypeId: varchar("similar_archetype_id", { length: 100 }),
     responseTimeMs: integer("response_time_ms"),
     isFeatured: boolean("is_featured").notNull().default(false),
+    featuredPlayerName: varchar("featured_player_name", { length: 100 }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     adminNote: text("admin_note"),
     createdAt: timestamp("created_at", { withTimezone: true })

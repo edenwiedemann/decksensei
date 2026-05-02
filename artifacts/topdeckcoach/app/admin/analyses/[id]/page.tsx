@@ -18,6 +18,7 @@ interface AnalysisDetail {
   analysis_text: string;
   response_time_ms: number | null;
   is_featured: boolean;
+  featured_player_name: string | null;
   admin_note: string | null;
   similar_archetype_id: string | null;
   created_at: Date;
@@ -41,6 +42,7 @@ async function getAnalysis(id: string): Promise<AnalysisDetail | null> {
       a.analysis_text,
       a.response_time_ms,
       a.is_featured,
+      a.featured_player_name,
       a.admin_note,
       a.similar_archetype_id,
       a.created_at,
@@ -173,7 +175,7 @@ export default async function AdminAnalysisDetailPage({ params }: PageProps) {
             <MarkFeaturedForm
               gameId={analysis.game_id}
               analysisId={analysis.id}
-              currentPlayerName={analysis.admin_note ?? ""}
+              currentFeaturedPlayerName={analysis.featured_player_name ?? ""}
               isFeatured={analysis.is_featured}
             />
           </div>
