@@ -6,12 +6,14 @@ import AnalysisResult from "./AnalysisResult";
 interface AnalysisStreamProps {
   text: string;
   streaming: boolean;
+  colorMap: Record<string, string>;
   onReset: () => void;
 }
 
 export default function AnalysisStream({
   text,
   streaming,
+  colorMap,
   onReset,
 }: AnalysisStreamProps) {
   const hasText = text.length > 0;
@@ -38,7 +40,7 @@ export default function AnalysisStream({
 
       {/* Cards de seção — aparecem progressivamente durante o stream */}
       {hasText && (
-        <AnalysisResult text={text} streaming={streaming} />
+        <AnalysisResult text={text} streaming={streaming} colorMap={colorMap} />
       )}
 
       {/* Botão Nova análise — aparece quando o stream termina */}

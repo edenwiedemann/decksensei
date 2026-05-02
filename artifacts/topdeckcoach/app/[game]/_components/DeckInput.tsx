@@ -48,6 +48,8 @@ interface AnalysisState {
   error: string;
   /** Erros de validação do deck — quando preenchido, mostra lista coach-tone. */
   validationErrors: string[];
+  /** Mapa nome_pt → cor primária do arquetipo, vindo do header X-Meta-Color-Map. */
+  colorMap: Record<string, string>;
 }
 
 const IDLE: AnalysisState = {
@@ -55,6 +57,7 @@ const IDLE: AnalysisState = {
   text: "",
   error: "",
   validationErrors: [],
+  colorMap: {},
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -125,13 +128,14 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         text: "",
         error: "",
         validationErrors: validation.errors,
+        colorMap: {},
       });
       return;
     }
 
     try {
       // ── Enriquecer cartas via API externa ─────────────────────────────
-      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [] });
+      setAnalysis({ phase: "enriching", text: "", error: "", validationErrors: [], colorMap: {} });
 
       const allCards: ParsedCard[] = [
         ...parsed.mainDeck,
@@ -166,7 +170,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
       }));
 
       // ── Streaming da análise via /api/analyze ─────────────────────────
-      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [] });
+      setAnalysis({ phase: "streaming", text: "", error: "", validationErrors: [], colorMap: {} });
 
       // Layer 1: erro de rede na requisição inicial
       let res: Response;
@@ -186,9 +190,9 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
         setAnalysis({
           phase: "error",
           text: "",
-          error:
-            "Não consegui conectar agora — tenta de novo em alguns segundos.",
+          error: "Não consegui conectar agora — tenta de novo em alguns segundos.",
           validationErrors: [],
+          colorMap: {},
         });
         return;
       }
@@ -202,6 +206,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           text: "",
           error: httpErrorMessage(res.status, serverMsg),
           validationErrors: [],
+          colorMap: {},
         });
         return;
       }
@@ -212,8 +217,18 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           text: "",
           error: "Resposta inesperada do servidor — tenta de novo.",
           validationErrors: [],
+          colorMap: {},
         });
         return;
+      }
+
+      // ── Captura colorMap do header antes de ler o stream ─────────────
+      let colorMap: Record<string, string> = {};
+      try {
+        const raw = res.headers.get("X-Meta-Color-Map");
+        if (raw) colorMap = JSON.parse(decodeURIComponent(raw)) as Record<string, string>;
+      } catch {
+        // header ausente ou malformado — análise continua sem cores de arquetipo
       }
 
       // ── Leitura do stream ─────────────────────────────────────────────
@@ -229,10 +244,10 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           return;
         }
         fullText += decoder.decode(value, { stream: true });
-        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [] });
+        setAnalysis({ phase: "streaming", text: fullText, error: "", validationErrors: [], colorMap });
       }
 
-      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [] });
+      setAnalysis({ phase: "done", text: fullText, error: "", validationErrors: [], colorMap });
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       // Layer 1: erro de stream (conexão caiu durante a leitura)
@@ -240,9 +255,9 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
       setAnalysis({
         phase: "error",
         text: "",
-        error:
-          "A conexão caiu no meio da análise — tenta de novo em alguns segundos.",
+        error: "A conexão caiu no meio da análise — tenta de novo em alguns segundos.",
         validationErrors: [],
+        colorMap: {},
       });
     }
   }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules]);
@@ -404,6 +419,7 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
           <AnalysisStream
             text={analysis.text}
             streaming={phase === "streaming"}
+            colorMap={analysis.colorMap}
             onReset={handleReset}
           />
         </div>
