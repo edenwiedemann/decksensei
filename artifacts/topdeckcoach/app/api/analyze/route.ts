@@ -19,7 +19,7 @@ import Anthropic, {
   APIError,
 } from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
-import { db, analysesTable, apiCostsTable } from "@workspace/db";
+import { db, analysesTable } from "@workspace/db";
 import {
   buildAnalysisPrompt,
   PromptBuildError,
@@ -27,15 +27,13 @@ import {
 } from "@/lib/analysis-prompt";
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { trackCost, checkDailyCap } from "@/lib/cost-tracker";
 
 // ─── Configuração do modelo ───────────────────────────────────────────────────
 
 const CLAUDE_MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 2500;
 const TEMPERATURE = 0.4;
-
-const INPUT_COST_PER_TOKEN = 3 / 1_000_000;
-const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000;
 
 // ─── Rate limit config ────────────────────────────────────────────────────────
 
@@ -229,6 +227,29 @@ export async function POST(request: NextRequest) {
   }
   const colorMapHeader = encodeURIComponent(JSON.stringify(colorMap));
 
+  // ── 3c. Verifica cap de custo diário ──────────────────────────────────
+  let capCheck: Awaited<ReturnType<typeof checkDailyCap>>;
+  try {
+    capCheck = await checkDailyCap();
+  } catch (err) {
+    console.error("[analyze] checkDailyCap falhou:", err);
+    capCheck = { allowed: true, currentUsd: 0, capUsd: 10 };
+  }
+
+  if (!capCheck.allowed) {
+    console.warn(
+      `[analyze] daily cap atingido — gasto: $${capCheck.currentUsd.toFixed(4)} / cap: $${capCheck.capUsd}`,
+    );
+    return Response.json(
+      {
+        error: "daily_cap",
+        message_pt:
+          "Atingimos o limite operacional do dia. Voltamos em algumas horas.",
+      },
+      { status: 503 },
+    );
+  }
+
   // ── 4. Streaming via Anthropic SDK ────────────────────────────────────
   const anthropic = new Anthropic();
 
@@ -264,12 +285,8 @@ export async function POST(request: NextRequest) {
         const responseTimeMs = Date.now() - startTime;
         const inputTokens = finalMessage.usage.input_tokens;
         const outputTokens = finalMessage.usage.output_tokens;
-        const costUsd = (
-          inputTokens * INPUT_COST_PER_TOKEN +
-          outputTokens * OUTPUT_COST_PER_TOKEN
-        ).toFixed(6);
 
-        // ── 5. Persiste análise e custo no DB (best-effort) ───────────
+        // ── 5. Persiste análise no DB (best-effort) ───────────────────
         try {
           const similarArchetypeId = extractSimilarArchetype(
             fullText,
@@ -287,16 +304,12 @@ export async function POST(request: NextRequest) {
             similarArchetypeId,
             responseTimeMs,
           });
-
-          await db.insert(apiCostsTable).values({
-            analysisId,
-            inputTokens,
-            outputTokens,
-            costUsd,
-          });
         } catch (dbErr) {
-          console.error("[analyze] falha ao salvar no DB:", dbErr);
+          console.error("[analyze] falha ao salvar análise no DB:", dbErr);
         }
+
+        // ── 6. Rastreia custo com tokens reais da API ─────────────────
+        await trackCost(inputTokens, outputTokens, analysisId);
       } catch (err) {
         logAnthropicError(analysisId, err);
         controller.error(new Error("stream_error"));
