@@ -47,6 +47,8 @@ export const promptsTable = pgTable(
     systemContent: text("system_content").notNull(),
     notes: text("notes"),
     active: boolean("active").notNull().default(false),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    activatedBy: varchar("activated_by", { length: 100 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

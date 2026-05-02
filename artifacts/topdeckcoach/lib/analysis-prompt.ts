@@ -490,10 +490,17 @@ export async function buildAnalysisPrompt({
   gameId,
   deck,
   enrichedCards,
+  systemContentOverride,
 }: {
   gameId: string;
   deck: ParsedDeck;
   enrichedCards: EnrichedCard[];
+  /**
+   * Conteúdo do system prompt a usar em vez do ativo no DB.
+   * Utilizado no endpoint de teste de rascunho (/api/admin/prompts/test).
+   * Quando presente, o prompt ativo ainda é carregado para obter `promptVersionId`.
+   */
+  systemContentOverride?: string;
 }): Promise<BuiltPrompt> {
   // Carrega todos os recursos em paralelo (cacheados 60 s após 1ª chamada)
   // A snapshot local pode retornar null sem lançar erro
@@ -516,8 +523,11 @@ export async function buildAnalysisPrompt({
   const archetypesText = formatArchetypesContext(globalContent, localSnapshot);
   const cardCodeExamples = (gameConfig.card_code_examples ?? []).join(", ");
 
+  // Se override fornecido (modo teste), usa em vez do template ativo
+  const templateContent = systemContentOverride ?? prompt.systemContent;
+
   // Substitui todos os {{placeholders}} no template do system
-  const system = prompt.systemContent
+  const system = templateContent
     .replace(/\{\{game_name\}\}/g, game.name)
     .replace(/\{\{game_card_code_pattern\}\}/g, gameConfig.card_code_pattern ?? "")
     .replace(/\{\{game_card_code_examples\}\}/g, cardCodeExamples)

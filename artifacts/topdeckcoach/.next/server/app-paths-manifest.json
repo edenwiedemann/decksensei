@@ -1,3 +1,5 @@
 {
-  "/[game]/page": "app/[game]/page.js"
+  "/[game]/page": "app/[game]/page.js",
+  "/admin/prompts/[id]/edit/page": "app/admin/prompts/[id]/edit/page.js",
+  "/admin/prompts/new/page": "app/admin/prompts/new/page.js"
 }
