@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -91,26 +91,46 @@ export default function PromptEditor({
   const [saveError, setSaveError] = useState("");
   const [activateError, setActivateError] = useState("");
 
-  const insertVariable = useCallback(
-    (varKey: string) => {
-      const tag = `{{${varKey}}}`;
-      // Try to find MDEditor's internal textarea by its class
-      const ta = document.querySelector<HTMLTextAreaElement>(".w-md-editor-text-input");
-      if (!ta) {
-        setContent((prev) => prev + tag);
-        return;
+  // (a) Rastreia última posição do cursor enquanto a textarea está focada
+  const lastCursorRef = useRef<{ start: number; end: number } | null>(null);
+
+  useEffect(() => {
+    const ta = document.querySelector<HTMLTextAreaElement>(
+      ".w-md-editor-text-input",
+    );
+    if (!ta) return;
+    const handler = () => {
+      if (document.activeElement === ta) {
+        lastCursorRef.current = {
+          start: ta.selectionStart ?? 0,
+          end: ta.selectionEnd ?? 0,
+        };
       }
-      const start = ta.selectionStart ?? content.length;
-      const end = ta.selectionEnd ?? content.length;
-      const updated = content.slice(0, start) + tag + content.slice(end);
-      setContent(updated);
-      requestAnimationFrame(() => {
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
+
+  // (b) Usa functional updater para evitar stale closure; deps vazias
+  const insertVariable = useCallback((varKey: string) => {
+    const tag = `{{${varKey}}}`;
+    const pos = lastCursorRef.current;
+    setContent((prev) => {
+      if (!pos) return prev + tag;
+      return prev.slice(0, pos.start) + tag + prev.slice(pos.end);
+    });
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>(
+        ".w-md-editor-text-input",
+      );
+      if (ta && pos) {
+        const newPos = pos.start + tag.length;
         ta.focus();
-        ta.setSelectionRange(start + tag.length, start + tag.length);
-      });
-    },
-    [content],
-  );
+        ta.setSelectionRange(newPos, newPos);
+        lastCursorRef.current = { start: newPos, end: newPos };
+      }
+    });
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaveError("");
@@ -163,6 +183,11 @@ export default function PromptEditor({
       setActivating(false);
     }
   }, [promptId, router]);
+
+  // (d) Preview com variáveis substituídas por exemplos
+  const previewContent = VARIABLES.reduce((acc, v) => {
+    return acc.replaceAll(`{{${v.key}}}`, v.example);
+  }, content);
 
   return (
     <div className="flex flex-col gap-5">
@@ -243,8 +268,10 @@ export default function PromptEditor({
                         <p className="text-xs font-medium text-foreground leading-snug">
                           {v.label}
                         </p>
+                        {/* (c) onMouseDown previne roubo de foco da textarea */}
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => insertVariable(v.key)}
                           className="shrink-0 rounded-md border border-border/40 bg-card/50 px-2 py-0.5 text-[10px] text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
                         >
@@ -266,10 +293,14 @@ export default function PromptEditor({
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
               Preview em tempo real
             </p>
+            {/* (d) Nota sobre substituição de variáveis */}
+            <p className="text-[10px] text-muted-foreground/40 leading-snug -mt-1">
+              Variáveis substituídas por exemplos. O coach recebe valores reais.
+            </p>
             <div className="min-h-[200px] max-h-[340px] overflow-y-auto rounded-xl border border-border/40 bg-card/30 p-4">
               {content.trim() ? (
                 <div className="prose prose-sm prose-invert max-w-none text-xs leading-relaxed">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewContent}</ReactMarkdown>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground/40 italic">

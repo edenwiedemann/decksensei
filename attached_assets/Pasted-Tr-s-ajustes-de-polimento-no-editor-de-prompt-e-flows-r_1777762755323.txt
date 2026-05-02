@@ -1,0 +1,131 @@
+Três ajustes de polimento no editor de prompt e flows relacionados.
+
+═══ AJUSTE 1: Sufixo de duplicação usar hífen ASCII, não em-dash ═══
+
+Quando o usuário clica "Duplicar" em /admin/prompts, a nova versão fica como
+"v1—cópia" usando um em-dash (—, U+2014). Em-dash em version causa problema:
+- Confunde em URLs e queries (precisa encode)
+- Visualmente parece bug
+- Quebra padrão dos outros version strings (que são tudo ASCII)
+
+Procura em todo o repo por strings que adicionam " — cópia", "—cópia", ou
+similares ao version. Provável local: app/api/admin/prompts/[id]/duplicate/
+route.ts. Pode haver lógica equivalente em meta snapshots também.
+
+Substitui o em-dash + "cópia" por "-copia" (hífen ASCII + texto sem acento,
+pra ficar safe em URL):
+  Antes:  `${original.version} — cópia`
+  Depois: `${original.version}-copia`
+
+Se já existir uma versão com esse sufixo, adiciona contador: "-copia-2",
+"-copia-3", etc, fazendo um SELECT prévio pra evitar UNIQUE violation no
+índice (game_id, version).
+
+Aplica a mesma lógica em /api/admin/meta/snapshots/[id]/archetypes/[archIdx]/
+duplicate/route.ts se houver lógica equivalente lá também.
+
+═══ AJUSTE 2: Simplificar toolbar do MDEditor pro filho não-programador ═══
+
+A toolbar default do @uiw/react-md-editor mostra 14 ícones (B, I, S, HR, ##,
+link, citação, code, image, table, listas). Para edição de prompt do coach,
+isso é ruído — meu filho não vai usar tabela, image, hr, ou code block. Só
+precisa do mínimo pra deixar texto legível.
+
+Em artifacts/decksensei/app/admin/prompts/_components/PromptEditor.tsx,
+importa os comandos específicos:
+
+  import MDEditor, { commands } from "@uiw/react-md-editor";
+
+(Se MDEditor já é dinamicamente importado via next/dynamic, mantém o dynamic
+mas adiciona o import nominal de `commands` separadamente — `commands` é
+exportado como named export e funciona em SSR.)
+
+Passa um array enxuto de comandos pro componente:
+
+  <MDEditor
+    value={content}
+    onChange={(v) => setContent(v ?? "")}
+    preview="edit"
+    height={520}
+    className="!border-border/40"
+    commands={[
+      commands.bold,
+      commands.italic,
+      commands.divider,
+      commands.title2,        // ## heading
+      commands.title3,        // ### heading
+      commands.divider,
+      commands.unorderedListCommand,
+      commands.orderedListCommand,
+      commands.divider,
+      commands.link,
+      commands.quote,
+    ]}
+    extraCommands={[]}        // remove os botões "preview/edit/fullscreen"
+                              // do canto direito (já temos preview separado)
+  />
+
+Confirma visualmente que sobrou só: B, I, ## , ###, lista, lista numerada,
+link, citação. Sem code block, sem image, sem table, sem HR, sem strike.
+
+═══ AJUSTE 3: Preview com altura maior + toggle tela cheia ═══
+
+Hoje o "Preview em tempo real" tem max-h-[340px] e corta no meio do prompt
+(meu filho viu até `{{game_deck_rules}}` e o resto sumiu — não dá pra avaliar
+se o prompt tá bom).
+
+Em PromptEditor.tsx, no bloco do preview:
+
+(a) Sobe a altura padrão de max-h-[340px] pra max-h-[640px]:
+
+    <div className="min-h-[200px] max-h-[640px] overflow-y-auto rounded-xl
+                    border border-border/40 bg-card/30 p-4">
+
+(b) Adiciona estado pra modal de tela cheia:
+
+    const [previewFullscreen, setPreviewFullscreen] = useState(false);
+
+(c) Acima do preview (mesma linha do label "Preview em tempo real"), coloca
+    botão pequeno alinhado à direita:
+
+    <div className="flex items-center justify-between">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+        Preview em tempo real
+      </p>
+      <button
+        type="button"
+        onClick={() => setPreviewFullscreen(true)}
+        className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+      >
+        ⛶ tela cheia
+      </button>
+    </div>
+
+(d) Logo abaixo dos modais existentes (testOpen, activateOpen), adiciona
+    modal de fullscreen do preview:
+
+    <Dialog open={previewFullscreen} onOpenChange={setPreviewFullscreen}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"
+                     aria-describedby="preview-full-desc">
+        <DialogHeader>
+          <DialogTitle>Preview em tela cheia</DialogTitle>
+          <DialogDescription id="preview-full-desc"
+                             className="text-xs text-muted-foreground">
+            Variáveis substituídas por exemplos. O coach recebe valores reais.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {previewContent}
+          </ReactMarkdown>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+  Use a mesma variável `previewContent` que substitui as variáveis pelos
+  exemplos (do ajuste anterior do bug das variáveis). Se ainda não foi
+  implementado, esse modal usa `content` cru por enquanto, e atualiza junto
+  quando aquele ajuste for feito.
+
+Testa: edita um prompt longo, clica em "tela cheia", confirma que abre modal
+grande mostrando o markdown renderizado inteiro com scroll interno.
