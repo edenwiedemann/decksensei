@@ -153,7 +153,7 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
-  artifacts/topdeckcoach:
+  artifacts/decksensei:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.92.0

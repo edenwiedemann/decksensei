@@ -7,7 +7,6 @@ Projeto pai-e-filho: pai cuida da parte técnica, filho (jogador competitivo de 
 
 **Jogo atual:** Digimon Card Game (BT21 Standard EN).
 **Arquitetura:** TCG-agnóstica — o jogo é sempre parâmetro de URL/schema, nunca hardcode.
-**Nome público:** Deck Sensei (rebrand de TopdeckCoach)
 
 ## Stack
 
@@ -18,10 +17,10 @@ Projeto pai-e-filho: pai cuida da parte técnica, filho (jogador competitivo de 
 - **Email:** Resend — magic link login
 - **Monorepo:** pnpm workspaces
 
-## Estrutura de pastas (artifact: topdeckcoach)
+## Estrutura de pastas (artifact: decksensei)
 
 ```
-artifacts/topdeckcoach/
+artifacts/decksensei/
   app/
     [game]/page.tsx         ← landing por jogo (ex: /digimon)
     [game]/_components/     ← DeckInput, AnalysisResult, etc.
@@ -123,7 +122,7 @@ Ver `.env.example`. Configuradas no Replit:
 ## Comandos principais
 
 ```bash
-pnpm --filter @workspace/topdeckcoach run dev    # dev server
+pnpm --filter @workspace/decksensei run dev    # dev server
 pnpm --filter @workspace/db run push             # aplicar schema no banco
 npx tsc --noEmit                                  # type check (zero erros)
 ```
