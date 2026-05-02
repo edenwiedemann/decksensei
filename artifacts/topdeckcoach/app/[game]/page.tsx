@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { db, analysesTable, gamesTable, eq, and, isNull } from "@workspace/db";
 import { notFound } from "next/navigation";
 import DeckInput from "./_components/DeckInput";
@@ -7,6 +8,29 @@ interface GamePageProps {
   params: Promise<{ game: string }>;
   searchParams: Promise<{ resume?: string }>;
 }
+
+// Cache da análise em destaque por jogo — revalida a cada 5 min ou por tag
+const getCachedFeaturedAnalysis = unstable_cache(
+  async (gameId: string) => {
+    const results = await db
+      .select({
+        analysisText: analysesTable.analysisText,
+        featuredPlayerName: analysesTable.featuredPlayerName,
+      })
+      .from(analysesTable)
+      .where(
+        and(
+          eq(analysesTable.gameId, gameId),
+          eq(analysesTable.isFeatured, true),
+          isNull(analysesTable.deletedAt),
+        ),
+      )
+      .limit(1);
+    return results[0] ?? null;
+  },
+  ["featured-analysis"],
+  { revalidate: 300, tags: ["featured-analysis"] },
+);
 
 const DECK_PLACEHOLDERS: Record<string, string> = {
   digimon: `Cole sua decklist aqui (formato Digimon padrão: 4 BT13-040 Magnamon)
@@ -32,32 +56,17 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
   const { resume } = await searchParams;
   const autoResume = resume === "true";
 
-  const [gameResults, featuredResults] = await Promise.all([
+  const [gameResults, featured] = await Promise.all([
     db
       .select()
       .from(gamesTable)
       .where(eq(gamesTable.id, game))
       .limit(1),
-    db
-      .select({
-        analysisText: analysesTable.analysisText,
-        featuredPlayerName: analysesTable.featuredPlayerName,
-      })
-      .from(analysesTable)
-      .where(
-        and(
-          eq(analysesTable.gameId, game),
-          eq(analysesTable.isFeatured, true),
-          isNull(analysesTable.deletedAt),
-        ),
-      )
-      .limit(1),
+    getCachedFeaturedAnalysis(game),
   ]);
 
   const gameData = gameResults[0];
   if (!gameData) notFound();
-
-  const featured = featuredResults[0] ?? null;
 
   const placeholder = DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
   const badgeLabel = GAME_BADGE_LABELS[game] ?? gameData.name;

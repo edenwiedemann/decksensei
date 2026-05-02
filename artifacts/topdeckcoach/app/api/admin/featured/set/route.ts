@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth/admin";
 import { db, analysesTable, eq, and, isNull } from "@workspace/db";
 
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest) {
         isNull(analysesTable.deletedAt),
       ),
     );
+
+  // Invalida cache da featured analysis para esse jogo
+  revalidateTag("featured-analysis");
+  revalidatePath(`/${gameId}`);
 
   return Response.json({ ok: true });
 }
