@@ -3,14 +3,21 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Middleware Next.js — protege /admin/* e /api/admin/* com admin_session cookie.
  *
- * A validação criptográfica (timingSafeEqual + sha256) acontece dentro dos
- * route handlers e server components via `requireAdmin` / `requireAdminCookie`
- * de lib/auth/admin.ts (Node.js runtime).
- *
- * Aqui fazemos apenas o gate de presença do cookie, que é suficiente para
- * o Edge Runtime (sem crypto Node.js).
+ * Valida o cookie criptograficamente usando Web Crypto API (disponível no Edge
+ * Runtime) computando SHA-256(email:token) e comparando com o cookie.
  */
-export function middleware(req: NextRequest) {
+
+async function expectedSession(): Promise<string> {
+  const email = process.env.ADMIN_EMAIL ?? "";
+  const token = process.env.ADMIN_TOKEN ?? "";
+  const data = new TextEncoder().encode(`${email}:${token}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Permite acesso à página e API de login sem autenticação
@@ -18,17 +25,21 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession =
-    !!req.cookies.get("admin_session")?.value ||
-    !!req.headers.get("x-admin-token");
+  const cookieValue = req.cookies.get("admin_session")?.value ?? "";
+  const headerToken = req.headers.get("x-admin-token") ?? "";
+  const adminToken = process.env.ADMIN_TOKEN ?? "";
 
-  if (!hasSession) {
-    // Rotas de API → 401 JSON (sem redirect)
+  // 1. Header x-admin-token: comparação direta (API calls programáticas)
+  const headerOk = headerToken.length > 0 && headerToken === adminToken;
+
+  // 2. Cookie admin_session: valida hash criptograficamente
+  const cookieOk =
+    cookieValue.length > 0 && cookieValue === (await expectedSession());
+
+  if (!headerOk && !cookieOk) {
     if (pathname.startsWith("/api/admin/")) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-
-    // Páginas admin → redirect para login
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.search = "";

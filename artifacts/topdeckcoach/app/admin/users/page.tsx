@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { pool } from "@workspace/db";
+import { requireAdminCookie } from "@/lib/auth/admin";
 import SearchBar from "./_components/SearchBar";
 import Pagination from "./_components/Pagination";
 
@@ -63,6 +64,7 @@ interface PageProps {
 }
 
 export default async function AdminUsersPage({ searchParams }: PageProps) {
+  await requireAdminCookie();
   const { q = "", page: pageStr = "1" } = await searchParams;
   const page = Math.max(1, parseInt(pageStr, 10) || 1);
 

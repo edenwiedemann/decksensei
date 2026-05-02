@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { pool } from "@workspace/db";
 import { getDailyCost } from "@/lib/cost-tracker";
+import { requireAdminCookie } from "@/lib/auth/admin";
 import GameSelector from "./_components/GameSelector";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ const NAV_LINKS = [
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function AdminDashboardPage() {
+  await requireAdminCookie();
   const [totalUsers, analysesToday, feedbackPct, dailyCostUsd] =
     await Promise.all([
       getTotalUsers().catch(() => null),

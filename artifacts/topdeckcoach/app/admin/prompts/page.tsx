@@ -47,7 +47,7 @@ async function getPrompts(gameId: string): Promise<PromptRow[]> {
 }
 
 export default async function PromptsListPage() {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const gameId = "digimon";
   const prompts = await getPrompts(gameId);

@@ -19,7 +19,7 @@ async function getNextSuggestedVersion(gameId: string): Promise<string> {
 }
 
 export default async function NewPromptPage() {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const gameId = "digimon";
   const suggestedVersion = await getNextSuggestedVersion(gameId);

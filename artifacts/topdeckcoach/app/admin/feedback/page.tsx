@@ -69,7 +69,7 @@ export default async function FeedbackPage({
 }: {
   searchParams: Promise<{ page?: string; rating?: string }>;
 }) {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const sp     = await searchParams;
   const page   = Math.max(1, parseInt(sp.page ?? "1", 10));

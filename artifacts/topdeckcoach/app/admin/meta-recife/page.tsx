@@ -37,7 +37,7 @@ async function getLocalSnapshots(gameId: string): Promise<SnapshotRow[]> {
 }
 
 export default async function MetaRecifeListPage() {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const gameId = "digimon";
   const snapshots = await getLocalSnapshots(gameId);

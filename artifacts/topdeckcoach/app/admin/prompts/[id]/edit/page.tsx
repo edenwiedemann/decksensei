@@ -45,7 +45,7 @@ export default async function EditPromptPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const { id } = await params;
   const numericId = parseInt(id, 10);

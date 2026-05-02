@@ -30,7 +30,7 @@ export default async function ArchetypeEditPage({
 }: {
   params: Promise<{ id: string; archIdx: string }>;
 }) {
-  requireAdminCookie();
+  await requireAdminCookie();
 
   const { id, archIdx } = await params;
   const snapshotId = parseInt(id, 10);

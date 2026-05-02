@@ -18,7 +18,7 @@ function timingSafeEquals(a: string, b: string): boolean {
 }
 
 /**
- * Valor armazenado no cookie admin_session: SHA-256 de email:senha.
+ * Valor armazenado no cookie admin_session: SHA-256 de "email:senha".
  * Nunca expõe credenciais raw em cookie.
  */
 export function adminSessionValue(): string {
@@ -67,12 +67,16 @@ export function requireAdmin(req: Request): { ok: true } | Response {
  * Valida autenticação admin lendo o cookie `admin_session` via `next/headers`.
  * Use em Server Components e page.tsx.
  *
- * @returns `{ ok: true }` se autorizado, `null` se não autenticado.
+ * Se não autenticado, redireciona automaticamente para /admin/login.
+ * Nunca retorna null — ou retorna `{ ok: true }` ou redireciona.
  */
-export async function requireAdminCookie(): Promise<{ ok: true } | null> {
+export async function requireAdminCookie(): Promise<{ ok: true }> {
   const { cookies } = await import("next/headers");
+  const { redirect } = await import("next/navigation");
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get("admin_session")?.value ?? "";
-  if (!sessionValue) return null;
-  return timingSafeEquals(sessionValue, adminSessionValue()) ? { ok: true } : null;
+  if (!sessionValue || !timingSafeEquals(sessionValue, adminSessionValue())) {
+    redirect("/admin/login");
+  }
+  return { ok: true };
 }

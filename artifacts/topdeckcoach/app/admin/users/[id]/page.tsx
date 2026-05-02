@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pool } from "@workspace/db";
+import { requireAdminCookie } from "@/lib/auth/admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +61,7 @@ interface PageProps {
 }
 
 export default async function AdminUserDetailPage({ params }: PageProps) {
+  await requireAdminCookie();
   const { id: idStr } = await params;
   const id = parseInt(idStr, 10);
 

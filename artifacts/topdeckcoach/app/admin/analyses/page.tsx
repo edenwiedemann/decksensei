@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { pool } from "@workspace/db";
+import { requireAdminCookie } from "@/lib/auth/admin";
 import AnalysesFilters from "./_components/AnalysesFilters";
 
 export const dynamic = "force-dynamic";
@@ -118,6 +119,7 @@ interface PageProps {
 }
 
 export default async function AdminAnalysesPage({ searchParams }: PageProps) {
+  await requireAdminCookie();
   const sp = await searchParams;
   const filters: Filters = {
     from: sp.from, to: sp.to,
