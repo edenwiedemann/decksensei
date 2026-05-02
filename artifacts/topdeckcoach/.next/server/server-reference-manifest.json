@@ -1,5 +1,19 @@
 {
-  "node": {},
+  "node": {
+    "40a30df36241c5592a8b89b9b4a52c7049d222d8ac": {
+      "workers": {
+        "app/auth/verify/page": {
+          "moduleId": "(action-browser)/../../node_modules/.pnpm/next@15.5.15_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2Fhome%2Frunner%2Fworkspace%2Fartifacts%2Ftopdeckcoach%2Fapp%2Fauth%2Fverify%2Factions.ts%22%2C%5B%7B%22id%22%3A%2240a30df36241c5592a8b89b9b4a52c7049d222d8ac%22%2C%22exportedName%22%3A%22verifyAndLogin%22%2C%22filename%22%3A%22app%2Fauth%2Fverify%2Factions.ts%22%7D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/auth/verify/page": "action-browser"
+      },
+      "filename": "app/auth/verify/actions.ts",
+      "exportedName": "verifyAndLogin"
+    }
+  },
   "edge": {},
   "encryptionKey": "1HMtj1dyr4aotQdQ65M4XjDXHZjoiS66bu/zv9bfTR4="
 }
