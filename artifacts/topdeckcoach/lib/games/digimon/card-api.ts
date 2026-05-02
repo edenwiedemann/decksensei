@@ -3,6 +3,7 @@
  * Fonte: digimoncard.io/api-public
  * Limite: 15 req por 10s — usar com cache em runtime.
  * NÃO copiar dados para DB própria (licença da API).
+ * Implementação completa prevista no Épico 2.
  */
 
 import type { CardAPI, EnrichedCard } from "../types";

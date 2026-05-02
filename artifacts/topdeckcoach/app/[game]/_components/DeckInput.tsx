@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { type GameConfig, parseDeckList } from "@/lib/game-config";
+import { getParser } from "@/lib/games";
+import type { GameConfig } from "@/lib/game-config";
 
 interface DeckInputProps {
   placeholder: string;
   gameConfig: GameConfig;
+}
+
+function sumQty(cards: { quantity: number }[]): number {
+  return cards.reduce((acc, c) => acc + c.quantity, 0);
 }
 
 export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
@@ -15,21 +20,28 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
 
   const parsed = useMemo(() => {
     if (!deck.trim()) return null;
-    return parseDeckList(deck, gameConfig);
-  }, [deck, gameConfig]);
+    const parser = getParser(gameConfig.id);
+    return parser.parse(deck);
+  }, [deck, gameConfig.id]);
 
   const { main_deck_size, egg_deck_max } = gameConfig.deck_rules;
   const hasEggDeck = egg_deck_max > 0;
 
-  const isReady =
-    parsed !== null && parsed.mainDeckCount >= main_deck_size;
+  const mainDeckCount = parsed ? sumQty(parsed.mainDeck) : 0;
+  const eggDeckCount = parsed ? sumQty(parsed.auxDecks["egg"] ?? []) : 0;
+  const totalCards = mainDeckCount + eggDeckCount;
+  const hasRecognized = parsed
+    ? parsed.mainDeck.length + Object.values(parsed.auxDecks).flat().length > 0
+    : false;
+
+  const isReady = parsed !== null && mainDeckCount >= main_deck_size;
 
   const mainStatus: "ok" | "low" | "high" =
-    parsed === null
+    !parsed || mainDeckCount === 0
       ? "low"
-      : parsed.mainDeckCount === main_deck_size
+      : mainDeckCount === main_deck_size
         ? "ok"
-        : parsed.mainDeckCount > main_deck_size
+        : mainDeckCount > main_deck_size
           ? "high"
           : "low";
 
@@ -46,63 +58,77 @@ export default function DeckInput({ placeholder, gameConfig }: DeckInputProps) {
 
       {/* Deck parse preview */}
       {parsed !== null && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs">
-          {parsed.linesRecognized === 0 ? (
-            <span className="text-muted-foreground">
-              Nenhuma carta reconhecida — verifique o formato
-            </span>
-          ) : (
-            <>
-              <Stat label="total" value={parsed.totalCards} />
-              <Divider />
-              <span
-                className={
-                  mainStatus === "ok"
-                    ? "text-green-400"
-                    : mainStatus === "high"
-                      ? "text-amber-400"
-                      : "text-muted-foreground"
-                }
-              >
-                main deck:{" "}
-                <span className="font-semibold tabular-nums">
-                  {parsed.mainDeckCount}
-                </span>
-                <span className="text-muted-foreground/60">
-                  /{main_deck_size}
-                </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs">
+            {!hasRecognized ? (
+              <span className="text-muted-foreground">
+                Nenhuma carta reconhecida — verifique o formato
               </span>
+            ) : (
+              <>
+                <Stat label="total" value={totalCards} />
+                <Divider />
 
-              {hasEggDeck && (
-                <>
-                  <Divider />
-                  <span className="text-muted-foreground">
-                    egg deck:{" "}
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {parsed.eggDeckCount}
+                <span
+                  className={
+                    mainStatus === "ok"
+                      ? "text-green-400"
+                      : mainStatus === "high"
+                        ? "text-amber-400"
+                        : "text-muted-foreground"
+                  }
+                >
+                  main deck:{" "}
+                  <span className="font-semibold tabular-nums">
+                    {mainDeckCount}
+                  </span>
+                  <span className="text-muted-foreground/60">
+                    /{main_deck_size}
+                  </span>
+                </span>
+
+                {hasEggDeck && (
+                  <>
+                    <Divider />
+                    <span className="text-muted-foreground">
+                      egg deck:{" "}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {eggDeckCount}
+                      </span>
                     </span>
-                  </span>
-                </>
-              )}
+                  </>
+                )}
 
-              {mainStatus === "low" && parsed.mainDeckCount > 0 && (
-                <>
-                  <Divider />
-                  <span className="text-amber-400/80">
-                    faltam {main_deck_size - parsed.mainDeckCount}
-                  </span>
-                </>
-              )}
+                {mainStatus === "low" && mainDeckCount > 0 && (
+                  <>
+                    <Divider />
+                    <span className="text-amber-400/80">
+                      faltam {main_deck_size - mainDeckCount}
+                    </span>
+                  </>
+                )}
 
-              {mainStatus === "high" && (
-                <>
-                  <Divider />
-                  <span className="text-amber-400/80">
-                    {parsed.mainDeckCount - main_deck_size} a mais
-                  </span>
-                </>
-              )}
-            </>
+                {mainStatus === "high" && (
+                  <>
+                    <Divider />
+                    <span className="text-amber-400/80">
+                      {mainDeckCount - main_deck_size} a mais
+                    </span>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Erros de parsing */}
+          {parsed.errors.length > 0 && (
+            <ul className="flex flex-col gap-0.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+              {parsed.errors.map((err, i) => (
+                <li key={i} className="text-xs text-destructive/80">
+                  {err}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
