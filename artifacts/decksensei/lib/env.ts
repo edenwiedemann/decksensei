@@ -75,8 +75,14 @@ const APP_URL = requiredUrl("APP_URL", "REPLIT_DOMAINS");
 const DAILY_COST_CAP_USD = optionalNumeric("DAILY_COST_CAP_USD", "10");
 
 // ─── Falha no boot se houver qualquer problema ───────────────────────────────
+// Durante o build do Next.js (NEXT_PHASE=phase-production-build) as variáveis
+// de runtime ainda não estão disponíveis — pulamos o throw para não bloquear
+// o build; a validação dispara normalmente no primeiro request de produção.
 
-if (errors.length > 0) {
+const isBuildPhase =
+  process.env.NEXT_PHASE === "phase-production-build";
+
+if (errors.length > 0 && !isBuildPhase) {
   const msg = [
     "",
     "╔══════════════════════════════════════════════════════════════╗",
