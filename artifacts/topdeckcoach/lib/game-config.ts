@@ -1,5 +1,6 @@
 // DeckRules é a fonte canônica em lib/games/types.ts
-export type { DeckRules } from "./games/types";
+import type { DeckRules } from "./games/types";
+export type { DeckRules };
 
 export interface GameConfig {
   id: string;
