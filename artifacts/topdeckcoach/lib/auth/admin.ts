@@ -18,13 +18,15 @@ function timingSafeEquals(a: string, b: string): boolean {
 }
 
 /**
- * Valor armazenado no cookie admin_session: SHA-256 do ADMIN_TOKEN.
- * Nunca expõe o token raw em cookie.
+ * Valor armazenado no cookie admin_session: SHA-256 de email:senha.
+ * Nunca expõe credenciais raw em cookie.
  */
 export function adminSessionValue(): string {
+  const email = process.env.ADMIN_EMAIL ?? "";
+  const token = process.env.ADMIN_TOKEN ?? "";
   return crypto
     .createHash("sha256")
-    .update(process.env.ADMIN_TOKEN ?? "")
+    .update(`${email}:${token}`)
     .digest("hex");
 }
 
@@ -35,7 +37,7 @@ export function adminSessionValue(): string {
  *
  * Aceita, em ordem de prioridade:
  *   1. Header `x-admin-token` com o ADMIN_TOKEN bruto
- *   2. Cookie `admin_session` com sha256(ADMIN_TOKEN)
+ *   2. Cookie `admin_session` com sha256(email:senha)
  *
  * @returns `{ ok: true }` se autorizado, ou um `Response` 401 pronto para retornar.
  */

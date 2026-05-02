@@ -37,4 +37,5 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-ADMIN_TOKEN = "b8fba980a875a2f8f3757b663616ae0daa71953e"
+ADMIN_TOKEN = "14abcd1975"
+ADMIN_EMAIL = "eden.wiedemann@gmail.com"

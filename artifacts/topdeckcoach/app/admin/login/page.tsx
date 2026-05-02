@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,7 +22,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       if (res.ok) {
@@ -32,7 +33,7 @@ export default function AdminLoginPage() {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       setError(
         res.status === 401
-          ? "Senha incorreta."
+          ? "Email ou senha incorretos."
           : (body?.error ?? "Erro inesperado — tenta de novo."),
       );
     } catch {
@@ -61,6 +62,21 @@ export default function AdminLoginPage() {
         >
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
+              <Label htmlFor="admin-email">Email</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                autoComplete="username email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="admin-password">Senha</Label>
               <Input
                 id="admin-password"
@@ -70,7 +86,6 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
-                autoFocus
                 required
               />
             </div>
@@ -81,7 +96,7 @@ export default function AdminLoginPage() {
               </p>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading || !password}>
+            <Button type="submit" className="w-full" disabled={loading || !email || !password}>
               {loading ? "Entrando..." : "Entrar"}
             </Button>
           </div>
