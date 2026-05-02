@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { commands } from "@uiw/react-md-editor";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -69,6 +70,20 @@ const VARIABLES = [
   },
 ];
 
+const TOOLBAR_COMMANDS = [
+  commands.bold,
+  commands.italic,
+  commands.divider,
+  commands.title2,
+  commands.title3,
+  commands.divider,
+  commands.unorderedListCommand,
+  commands.orderedListCommand,
+  commands.divider,
+  commands.link,
+  commands.quote,
+];
+
 export default function PromptEditor({
   gameId,
   promptId,
@@ -86,12 +101,13 @@ export default function PromptEditor({
   const [varOpen, setVarOpen] = useState(true);
   const [testOpen, setTestOpen] = useState(false);
   const [activateOpen, setActivateOpen] = useState(false);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [activateError, setActivateError] = useState("");
 
-  // (a) Rastreia última posição do cursor enquanto a textarea está focada
+  // Rastreia última posição do cursor enquanto a textarea está focada
   const lastCursorRef = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
@@ -111,7 +127,7 @@ export default function PromptEditor({
     return () => document.removeEventListener("selectionchange", handler);
   }, []);
 
-  // (b) Usa functional updater para evitar stale closure; deps vazias
+  // Functional updater evita stale closure; deps vazias
   const insertVariable = useCallback((varKey: string) => {
     const tag = `{{${varKey}}}`;
     const pos = lastCursorRef.current;
@@ -184,7 +200,7 @@ export default function PromptEditor({
     }
   }, [promptId, router]);
 
-  // (d) Preview com variáveis substituídas por exemplos
+  // Preview com variáveis substituídas por exemplos
   const previewContent = VARIABLES.reduce((acc, v) => {
     return acc.replaceAll(`{{${v.key}}}`, v.example);
   }, content);
@@ -232,6 +248,8 @@ export default function PromptEditor({
             preview="edit"
             height={520}
             className="!border-border/40"
+            commands={TOOLBAR_COMMANDS}
+            extraCommands={[]}
           />
         </div>
 
@@ -268,7 +286,6 @@ export default function PromptEditor({
                         <p className="text-xs font-medium text-foreground leading-snug">
                           {v.label}
                         </p>
-                        {/* (c) onMouseDown previne roubo de foco da textarea */}
                         <button
                           type="button"
                           onMouseDown={(e) => e.preventDefault()}
@@ -290,14 +307,22 @@ export default function PromptEditor({
 
           {/* Preview em tempo real */}
           <div className="flex flex-col gap-2 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-              Preview em tempo real
-            </p>
-            {/* (d) Nota sobre substituição de variáveis */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                Preview em tempo real
+              </p>
+              <button
+                type="button"
+                onClick={() => setPreviewFullscreen(true)}
+                className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
+              >
+                ⛶ tela cheia
+              </button>
+            </div>
             <p className="text-[10px] text-muted-foreground/40 leading-snug -mt-1">
               Variáveis substituídas por exemplos. O coach recebe valores reais.
             </p>
-            <div className="min-h-[200px] max-h-[340px] overflow-y-auto rounded-xl border border-border/40 bg-card/30 p-4">
+            <div className="min-h-[200px] max-h-[640px] overflow-y-auto rounded-xl border border-border/40 bg-card/30 p-4">
               {content.trim() ? (
                 <div className="prose prose-sm prose-invert max-w-none text-xs leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewContent}</ReactMarkdown>
@@ -383,6 +408,21 @@ export default function PromptEditor({
             >
               {activating ? "Ativando…" : "⚡ Sim, ativar"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal preview tela cheia ─────────────────────────────── */}
+      <Dialog open={previewFullscreen} onOpenChange={setPreviewFullscreen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" aria-describedby="preview-full-desc">
+          <DialogHeader>
+            <DialogTitle>Preview em tela cheia</DialogTitle>
+            <DialogDescription id="preview-full-desc" className="text-xs text-muted-foreground">
+              Variáveis substituídas por exemplos. O coach recebe valores reais.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewContent}</ReactMarkdown>
           </div>
         </DialogContent>
       </Dialog>

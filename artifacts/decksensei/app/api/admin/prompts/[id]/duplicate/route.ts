@@ -28,7 +28,23 @@ export async function POST(
   }
 
   const source = existing[0];
-  const newVersion = `${source.version}-cópia`;
+
+  // Busca todas as versões do jogo para evitar UNIQUE violation
+  const allVersionRows = await db
+    .select({ version: promptsTable.version })
+    .from(promptsTable)
+    .where(eq(promptsTable.gameId, source.gameId));
+
+  const existingVersions = new Set(allVersionRows.map((r) => r.version));
+
+  // Gera versão segura para URL: hífen ASCII + sem acento
+  const base = `${source.version}-copia`;
+  let newVersion = base;
+  let counter = 2;
+  while (existingVersions.has(newVersion)) {
+    newVersion = `${base}-${counter}`;
+    counter++;
+  }
 
   const [created] = await db
     .insert(promptsTable)
@@ -36,7 +52,9 @@ export async function POST(
       gameId: source.gameId,
       version: newVersion,
       systemContent: source.systemContent,
-      notes: source.notes ? `Cópia de ${source.version}. ${source.notes}` : `Cópia de ${source.version}.`,
+      notes: source.notes
+        ? `Cópia de ${source.version}. ${source.notes}`
+        : `Cópia de ${source.version}.`,
       active: false,
     })
     .returning({ id: promptsTable.id, version: promptsTable.version });

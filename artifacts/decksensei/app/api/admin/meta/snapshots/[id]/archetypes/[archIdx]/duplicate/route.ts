@@ -36,8 +36,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const copy: Record<string, unknown> = {
     ...original,
     id:      `${String(original.id ?? "arch")}-copy-${Date.now()}`,
-    name:    `${String(original.name ?? "")} (cópia)`,
-    name_pt: original.name_pt ? `${String(original.name_pt)} (cópia)` : undefined,
+    name:    `${String(original.name ?? "")} (copia)`,
+    name_pt: original.name_pt ? `${String(original.name_pt)} (copia)` : undefined,
   };
 
   archetypes.push(copy);
