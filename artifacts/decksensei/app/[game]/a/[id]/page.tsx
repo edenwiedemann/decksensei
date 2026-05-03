@@ -105,6 +105,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
         ? `${[gradePrefix, archetype].filter(Boolean).join(" · ")} — Deck Sensei`
         : `Análise de deck ${analysis.gameName} — Deck Sensei`;
   const url = `https://decksensei.com.br/${game}/a/${id}`;
+  const ogImage = `https://decksensei.com.br/api/og/${id}`;
 
   return {
     title,
@@ -116,11 +117,13 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
       siteName: "Deck Sensei",
       type: "article",
       locale: "pt_BR",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
+      images: [ogImage],
     },
     alternates: { canonical: url },
   };
