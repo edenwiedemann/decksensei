@@ -104,6 +104,9 @@ export default function DeckInput({
   const abortRef = useRef<AbortController | null>(null);
   const analysisAreaRef = useRef<HTMLDivElement>(null);
   const deckFromUrlRef = useRef(false);
+  // True when the current analysis was triggered by an auto-resume after magic-link login.
+  // Prevents handleAnalyze from re-saving pending_deck_ for an authenticated session.
+  const isAutoResumeRef = useRef(false);
 
   // ── Auto-resume após magic-link ───────────────────────────────────────────
   useEffect(() => {
@@ -126,10 +129,19 @@ export default function DeckInput({
         } catch {
           setDeck(saved);
         }
+
+        // Mark that we are in an auto-resume flow so handleAnalyze skips
+        // re-saving pending_deck_ (user is now authenticated).
+        isAutoResumeRef.current = true;
+
+        // Clear any cached partial analysis so the fresh complete one is shown.
+        try { localStorage.removeItem(`ds_analysis_${gameConfig.id}`); } catch {}
+
         setPendingResume(true);
 
-        // Reivindica a análise anônima — silencioso, não bloqueia o resume
-        // localStorage só é removido após disparar o claim para não perder o token em falha transiente
+        // Partial-gate flow: analysisId is always null (never saved from gate).
+        // Auth-limit flow: analysisId may be set — claim it to preserve history.
+        // Either way, remove pending_deck_ after attempting the claim.
         if (pendingAnalysisId) {
           fetch("/api/analyses/claim", {
             method: "POST",
@@ -408,10 +420,11 @@ export default function DeckInput({
       const streamStartMs = Date.now();
       setAnalysis({ ...IDLE, phase: "streaming", failedCards });
 
-      // Salva deck para auto-resume ANTES do stream (visitantes anônimos)
+      // Salva deck para auto-resume ANTES do stream (visitantes anônimos).
       // Garante que o pending_deck esteja disponível mesmo se o usuário sair
       // durante o streaming ou ao ver o gate de conversão.
-      if (!usageCount?.isAuthenticated) {
+      // Pulado em auto-resume: o usuário já está autenticado após magic-link.
+      if (!usageCount?.isAuthenticated && !isAutoResumeRef.current) {
         try {
           localStorage.setItem(
             `pending_deck_${gameConfig.id}`,
@@ -502,6 +515,9 @@ export default function DeckInput({
       if (currentGrade) {
         try { localStorage.setItem(`ds_prev_grade_${gameConfig.id}`, currentGrade); } catch {}
       }
+
+      // Auto-resume concluído — próximas análises voltam ao fluxo normal.
+      isAutoResumeRef.current = false;
 
       setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct, elapsedSec, failedCards, currentGrade, isPartial });
 
@@ -742,7 +758,23 @@ export default function DeckInput({
             <PartialAnalysisGate
               text={analysis.text}
               colorMap={analysis.colorMap}
-              onOpenAuth={() => setShowAuthModal(true)}
+              onOpenAuth={() => {
+                // Explicitly persist the deck WITHOUT the partial analysisId.
+                // This ensures that on auto-resume the claim endpoint is never
+                // called for the partial analysis — the user gets a fresh full one.
+                try {
+                  localStorage.setItem(
+                    `pending_deck_${gameConfig.id}`,
+                    JSON.stringify({
+                      deck,
+                      deckName: deckName.trim() || null,
+                      tournamentMode,
+                      analysisId: null,
+                    }),
+                  );
+                } catch {}
+                setShowAuthModal(true);
+              }}
             />
           ) : (
             <AnalysisStream
