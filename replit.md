@@ -88,6 +88,8 @@ Tabelas TCG-agnósticas — todas com `game_id`:
 - `analysis_feedback` — upvote/downvote de análises
 - `api_costs` — registro de custo por chamada Anthropic
 - `rate_limits` — controle de rate limit
+- `meta_archetype_evidences` — evidências coletadas por pipeline (resultados de torneios, listas públicas, etc.)
+- `pipeline_health` — log de execuções de pipeline de coleta de evidências
 - **Não existe** tabela `meta_archetypes` — arquétipos vivem em `meta_snapshots.json_content`
 
 ## Estado atual do banco (desenvolvimento)
@@ -107,6 +109,30 @@ Ver `.env.example`. Configuradas no Replit:
 - `ADMIN_TOKEN` — senha do painel `/admin`, usada junto com `ADMIN_EMAIL` (obrigatório)
 - `APP_URL` — usa `REPLIT_DOMAINS` como fallback automático
 - `DAILY_COST_CAP_USD` — opcional (default: "10")
+- `CRON_SECRET` — token de 32+ chars para autenticar `POST /api/cron/evidences` via GitHub Actions; deve ser configurado tanto aqui (Replit env var) quanto no repositório GitHub (`Settings → Secrets → Actions`) como `CRON_SECRET`. O segundo secret GitHub `APP_URL` também é necessário para o workflow disparar a URL correta.
+
+## Sistema de evidências hierárquicas
+
+Infraestrutura de coleta automática de dados de meta (top 8, listas públicas, etc.) para enriquecer análises de deck com evidências reais.
+
+### Schema (lib/db/src/schema/)
+- `meta_archetype_evidences` — evidências por arquétipo/fonte com suporte a verificação manual e índice único (source_id, event_label, archetype_id)
+- `pipeline_health` — log de execuções de pipeline (status ok/broken/import_error, contagem de itens, mensagens de falha)
+
+### Pipelines (artifacts/decksensei/lib/evidence/)
+- `types.ts` — interfaces `EvidencePipeline`, `PipelineRun`, `FingerprintCheck`
+- `runner.ts` — orquestrador: valida fingerprint → importa → persiste saúde no DB → alerta admin em caso de falha
+- `alert.ts` — email de alerta via Resend para ADMIN_EMAIL usando o template emailShell
+- `score.ts` — `computeArchetypeConfidence()`: decay temporal (0-30d: 1.0, 30-180d: linear 0.5, 180-365d: linear 0.3, >365d: 0.3) × multiplicador de verificação (verified: 1.0, unverified: 0.6) × sample adequacy
+- `upsert.ts` — helper de upsert com ON CONFLICT preservando campos de verificação manual
+
+### Endpoints de cron
+- `POST /api/cron/evidences` — entry point semanal, autenticado via `Bearer CRON_SECRET`; lista de pipelines vazia até sessões B-D
+- `POST /api/cron/evidences/test/[source]` — executa uma pipeline isolada; autenticado via cookie `admin_session` ou header `x-admin-token`
+
+### GitHub Action
+- `.github/workflows/cron-evidences.yml` — dispara toda segunda-feira às 06:00 UTC (03:00 BRT)
+- Secrets necessários no GitHub: `APP_URL` e `CRON_SECRET` (mesmo valor da env var no Replit)
 
 ## Autenticação admin
 

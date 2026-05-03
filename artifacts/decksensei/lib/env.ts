@@ -74,6 +74,7 @@ const ADMIN_TOKEN = required("ADMIN_TOKEN");
 const APP_URL = requiredUrl("APP_URL", "REPLIT_DOMAINS");
 const DAILY_COST_CAP_USD = optionalNumeric("DAILY_COST_CAP_USD", "10");
 const TEST_DAILY_COST_CAP_USD = optionalNumeric("TEST_DAILY_COST_CAP_USD", "2");
+const CRON_SECRET = requiredMinLength("CRON_SECRET", 32);
 
 // ─── Falha no boot se houver qualquer problema ───────────────────────────────
 // Durante o build do Next.js (NEXT_PHASE=phase-production-build) as variáveis
@@ -113,6 +114,7 @@ export const env = {
   APP_URL,
   DAILY_COST_CAP_USD,
   TEST_DAILY_COST_CAP_USD,
+  CRON_SECRET,
 } as const;
 
 export type Env = typeof env;

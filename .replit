@@ -53,3 +53,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ADMIN_EMAIL = "eden.wiedemann@gmail.com"
+CRON_SECRET = "7eed92f797f18428534076c67ddf9377ce367a01ab71acfa7acb400112b82c3d"

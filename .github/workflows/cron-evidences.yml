@@ -1,0 +1,17 @@
+name: Coleta semanal de evidências
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # toda segunda 03:00 BRT (06:00 UTC)
+  workflow_dispatch:        # permite rodar manual via GitHub UI
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger pipeline endpoint
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/cron/evidences" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 600 \
+            --fail-with-body

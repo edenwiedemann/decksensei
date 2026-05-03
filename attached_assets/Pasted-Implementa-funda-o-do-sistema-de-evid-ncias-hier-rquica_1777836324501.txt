@@ -1,0 +1,212 @@
+Implementa fundação do sistema de evidências hierárquicas. Detalhes
+arquiteturais completos no arquivo pipelines-evidencias.md (referência).
+
+═══ PARTE 1: Schema novo no banco ═══
+
+Cria 2 migrações drizzle em lib/db/src/schema/ e roda push:
+
+1. lib/db/src/schema/evidences.ts — tabela meta_archetype_evidences:
+
+   import { pgTable, serial, varchar, text, jsonb, boolean, timestamp, date, index, uniqueIndex } from "drizzle-orm/pg-core";
+   import { gamesTable } from "./games";
+
+   export const metaArchetypeEvidencesTable = pgTable("meta_archetype_evidences", {
+     id: serial("id").primaryKey(),
+     gameId: varchar("game_id", { length: 100 }).notNull().references(() => gamesTable.id),
+     archetypeId: varchar("archetype_id", { length: 100 }).notNull(),
+     sourceId: varchar("source_id", { length: 100 }).notNull(),
+     eventLabel: text("event_label").notNull(),
+     eventDate: date("event_date").notNull(),
+     url: text("url"),
+     data: jsonb("data").notNull(),
+     verified: boolean("verified").notNull().default(false),
+     verifiedBy: varchar("verified_by", { length: 100 }),
+     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+     verificationNote: text("verification_note"),
+     importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+   }, (t) => [
+     index("evidences_archetype_idx").on(t.gameId, t.archetypeId),
+     index("evidences_source_idx").on(t.sourceId),
+     index("evidences_event_date_idx").on(t.eventDate),
+     uniqueIndex("evidences_unique_idx").on(t.sourceId, t.eventLabel, t.archetypeId),
+   ]);
+
+2. lib/db/src/schema/pipeline-health.ts:
+
+   export const pipelineHealthTable = pgTable("pipeline_health", {
+     id: serial("id").primaryKey(),
+     sourceId: varchar("source_id", { length: 100 }).notNull(),
+     status: varchar("status", { length: 20 }).notNull(),
+     itemsImported: integer("items_imported"),
+     failures: jsonb("failures"),
+     errorMessage: text("error_message"),
+     detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
+   }, (t) => [
+     index("pipeline_health_source_idx").on(t.sourceId, t.detectedAt),
+   ]);
+
+3. Atualiza lib/db/src/schema/index.ts pra exportar as 2 tabelas novas.
+
+═══ PARTE 2: Estrutura de pipelines em lib/evidence/ ═══
+
+Cria pasta lib/evidence/ com:
+
+a) lib/evidence/types.ts — interfaces compartilhadas:
+
+   export interface PipelineRun {
+     itemsImported: number;
+     archetypesUpdated: string[];
+     warnings: string[];
+   }
+   
+   export interface FingerprintCheck {
+     ok: boolean;
+     failures: string[];
+   }
+   
+   export interface EvidencePipeline {
+     sourceId: string;
+     validateFingerprint(): Promise<FingerprintCheck>;
+     import(): Promise<PipelineRun>;
+   }
+
+b) lib/evidence/runner.ts — orquestrador:
+
+   export async function runPipeline(pipeline: EvidencePipeline): Promise<{
+     status: "ok" | "broken" | "import_error" | "skipped";
+     details: unknown;
+   }> {
+     const validation = await pipeline.validateFingerprint();
+     
+     if (!validation.ok) {
+       await db.insert(pipelineHealthTable).values({
+         sourceId: pipeline.sourceId,
+         status: "broken",
+         failures: validation.failures,
+       });
+       await sendPipelineAlert(pipeline.sourceId, "broken", validation.failures);
+       return { status: "broken", details: validation.failures };
+     }
+     
+     try {
+       const result = await pipeline.import();
+       await db.insert(pipelineHealthTable).values({
+         sourceId: pipeline.sourceId,
+         status: "ok",
+         itemsImported: result.itemsImported,
+       });
+       return { status: "ok", details: result };
+     } catch (err) {
+       const errorMessage = (err as Error).message;
+       await db.insert(pipelineHealthTable).values({
+         sourceId: pipeline.sourceId,
+         status: "import_error",
+         errorMessage,
+       });
+       await sendPipelineAlert(pipeline.sourceId, "import_error", [errorMessage]);
+       return { status: "import_error", details: errorMessage };
+     }
+   }
+
+c) lib/evidence/alert.ts — envio de email via Resend:
+
+   export async function sendPipelineAlert(
+     sourceId: string,
+     status: "broken" | "import_error",
+     failures: string[]
+   ): Promise<void> {
+     // Usa lib/email-templates.ts emailShell pra montar email
+     // Subject: [Deck Sensei] Pipeline {sourceId} {status}
+     // Body: lista de failures + link pra /admin/pipelines/{sourceId}
+     // Envia pra env.ADMIN_EMAIL via Resend
+   }
+
+d) lib/evidence/score.ts — computeArchetypeConfidence (função pura,
+   detalhada no doc pipelines-evidencias.md). Decay temporal:
+   - 0-30 dias: 1.0
+   - 30-180 dias: linear de 1.0 a 0.5
+   - 180-365 dias: linear de 0.5 a 0.3
+   - > 365 dias: 0.3
+   Verified multiplier: verified=1.0, unverified=0.6
+   Sample adequacy: clamp(sample/min_sample, 0, 1)
+   Score normalizado: min(100, totalWeight / 1.5)
+
+e) lib/evidence/upsert.ts — helper pra inserir/atualizar evidência:
+
+   export async function upsertEvidence(ev: NewEvidence): Promise<void> {
+     // ON CONFLICT (source_id, event_label, archetype_id) DO UPDATE
+     // Mantém verified/verifiedBy/verifiedAt anteriores (não sobrescreve)
+   }
+
+═══ PARTE 3: Endpoint cron + auth ═══
+
+a) Adiciona env var em .env.example e lib/env.ts:
+   CRON_SECRET=string-aleatoria-32-chars-pro-cron-bater
+
+b) Cria app/api/cron/evidences/route.ts:
+
+   export const runtime = "nodejs";
+   export const maxDuration = 300;
+   
+   export async function POST(req: Request) {
+     const auth = req.headers.get("authorization");
+     if (auth !== `Bearer ${env.CRON_SECRET}`) {
+       return Response.json({ error: "unauthorized" }, { status: 401 });
+     }
+     
+     // Por enquanto retorna lista vazia — pipelines serão registradas nas
+     // sessões B-D. Estrutura aqui é só pra ter o entry point pronto.
+     const pipelines: EvidencePipeline[] = [];
+     
+     const results = await Promise.allSettled(
+       pipelines.map(p => runPipeline(p))
+     );
+     
+     return Response.json({
+       timestamp: new Date().toISOString(),
+       results: results.map((r, i) => ({
+         pipeline: pipelines[i].sourceId,
+         ...(r.status === "fulfilled" ? r.value : { status: "promise_rejected", details: String(r.reason) }),
+       })),
+     });
+   }
+
+c) Cria atalho de teste manual /api/cron/evidences/test/[source] (admin
+   protected via cookie ou x-admin-token, NÃO usa CRON_SECRET) que roda
+   uma pipeline específica isoladamente. Útil pra debugar.
+
+═══ PARTE 4: GitHub Action workflow ═══
+
+Cria .github/workflows/cron-evidences.yml:
+
+   name: Coleta semanal de evidências
+   on:
+     schedule:
+       - cron: '0 6 * * 1'   # toda segunda 03:00 BRT (06:00 UTC)
+     workflow_dispatch:        # permite rodar manual via GitHub UI
+   jobs:
+     collect:
+       runs-on: ubuntu-latest
+       steps:
+         - name: Trigger pipeline endpoint
+           run: |
+             curl -X POST "${{ secrets.APP_URL }}/api/cron/evidences" \
+               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+               --max-time 600 \
+               --fail-with-body
+
+   Documenta em replit.md que precisa configurar 2 secrets no GitHub:
+   APP_URL e CRON_SECRET (mesmo valor da env var no Replit).
+
+═══ Aceitação ═══
+
+1. pnpm typecheck passa
+2. Migrations aplicadas: psql confirma tabelas meta_archetype_evidences e
+   pipeline_health existem com índices corretos
+3. POST /api/cron/evidences sem auth → 401
+4. POST /api/cron/evidences com Bearer correto → 200, retorna { results: [] }
+5. Workflow file está válido (yaml lint)
+6. CRON_SECRET adicionado em .env.example com comentário
+
+NÃO implementa nenhuma pipeline ainda — só fundação. Pipelines vêm nas
+sessões B-D.
