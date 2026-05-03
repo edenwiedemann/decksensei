@@ -23,9 +23,7 @@ export default function DeckNameEditor({ analysisId, initialName, fallbackTitle 
     }
   }, [editing, name]);
 
-  const displayTitle = name
-    ? `${name} — Análise`
-    : fallbackTitle;
+  const displayTitle = name ? `${name} — Análise` : fallbackTitle;
 
   async function handleSave() {
     if (saving) return;
@@ -41,8 +39,12 @@ export default function DeckNameEditor({ analysisId, initialName, fallbackTitle 
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? "Erro ao salvar.");
       }
-      setName(draft.trim());
+      const savedName = draft.trim();
+      setName(savedName);
       setEditing(false);
+      // Update browser tab title immediately
+      const newDisplayTitle = savedName ? `${savedName} — Análise` : fallbackTitle;
+      document.title = `${newDisplayTitle} · Deck Sensei`;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar.");
     } finally {
@@ -52,7 +54,7 @@ export default function DeckNameEditor({ analysisId, initialName, fallbackTitle 
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") handleSave();
-    if (e.key === "Escape") setEditing(false);
+    if (e.key === "Escape") { setEditing(false); setError(null); }
   }
 
   if (editing) {
@@ -95,14 +97,14 @@ export default function DeckNameEditor({ analysisId, initialName, fallbackTitle 
   }
 
   return (
-    <div className="flex items-center gap-2 group">
+    <div className="flex items-center gap-2">
       <h1 className="text-2xl font-bold tracking-tight text-foreground">
         {displayTitle}
       </h1>
       <button
         onClick={() => setEditing(true)}
         aria-label="Editar nome do deck"
-        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+        className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted/50 hover:text-foreground"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
