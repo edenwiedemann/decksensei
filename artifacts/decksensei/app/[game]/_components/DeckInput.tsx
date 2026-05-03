@@ -107,16 +107,32 @@ export default function DeckInput({
     try {
       const saved = localStorage.getItem(`pending_deck_${gameConfig.id}`);
       if (saved) {
+        let pendingAnalysisId: string | null = null;
         try {
-          const parsed = JSON.parse(saved) as { deck?: string; deckName?: string; tournamentMode?: boolean };
+          const parsed = JSON.parse(saved) as {
+            deck?: string;
+            deckName?: string;
+            tournamentMode?: boolean;
+            analysisId?: string | null;
+          };
           if (parsed.deck) setDeck(parsed.deck);
           if (parsed.deckName) setDeckName(parsed.deckName);
           if (parsed.tournamentMode) setTournamentMode(parsed.tournamentMode);
+          if (parsed.analysisId) pendingAnalysisId = parsed.analysisId;
         } catch {
           setDeck(saved);
         }
         setPendingResume(true);
         localStorage.removeItem(`pending_deck_${gameConfig.id}`);
+
+        // Reivindica a análise anônima — silencioso, não bloqueia o resume
+        if (pendingAnalysisId) {
+          fetch("/api/analyses/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ analysisId: pendingAnalysisId }),
+          }).catch(() => {});
+        }
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -400,7 +416,17 @@ export default function DeckInput({
         const bodyTyped = body as { error?: string; message_pt?: string; retryAfterSec?: number } | null;
 
         if (res.status === 401 && bodyTyped?.error === "auth_required") {
-          try { localStorage.setItem(`pending_deck_${gameConfig.id}`, JSON.stringify({ deck, deckName: deckName.trim() || null, tournamentMode })); } catch {}
+          try {
+            localStorage.setItem(
+              `pending_deck_${gameConfig.id}`,
+              JSON.stringify({
+                deck,
+                deckName: deckName.trim() || null,
+                tournamentMode,
+                analysisId: analysis.analysisId || null,
+              }),
+            );
+          } catch {}
           setAnalysis(IDLE);
           setShowAuthModal(true);
           return;
