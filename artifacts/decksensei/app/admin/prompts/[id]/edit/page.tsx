@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pool } from "@workspace/db";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getPromptVariables, type PromptVariables } from "@/lib/analysis-prompt";
 import PromptEditor from "../../_components/PromptEditor";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,19 @@ export default async function EditPromptPage({
 
   const suggestedVersion = await getNextSuggestedVersion(prompt.game_id, prompt.version);
 
+  let realVariables: PromptVariables;
+  try {
+    realVariables = await getPromptVariables(prompt.game_id);
+  } catch {
+    realVariables = {
+      game_name: prompt.game_id,
+      game_card_code_pattern: "",
+      game_card_code_examples: "",
+      game_deck_rules: "",
+      archetypes_context: "(snapshot de meta não configurada)",
+    };
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
@@ -105,6 +119,7 @@ export default async function EditPromptPage({
           initialVersion={suggestedVersion}
           initialNotes=""
           isCurrentlyActive={prompt.active}
+          realVariables={realVariables}
         />
       </main>
     </div>

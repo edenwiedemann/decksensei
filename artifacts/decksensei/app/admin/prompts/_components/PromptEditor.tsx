@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
+import type { PromptVariables } from "@/lib/analysis-prompt";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,38 +25,34 @@ interface Props {
   initialNotes?: string;
   suggestedVersion: string;
   isCurrentlyActive?: boolean;
+  realVariables: PromptVariables;
 }
 
-const VARIABLES = [
+const VARIABLES: Array<{ key: keyof PromptVariables; label: string; description: string }> = [
   {
     key: "game_name",
     label: "Nome do jogo",
-    example: "Digimon Card Game",
-    description: "Preenchido com o nome completo do jogo",
+    description: "Nome completo do jogo da configuração ativa",
   },
   {
     key: "game_card_code_pattern",
     label: "Padrão de código de carta",
-    example: "BT13-040",
     description: "Formato padrão dos códigos de carta do jogo",
   },
   {
     key: "game_card_code_examples",
     label: "Exemplos de códigos",
-    example: "BT01-001, ST1-01",
     description: "Lista de exemplos reais de códigos de cartas",
   },
   {
     key: "game_deck_rules",
     label: "Regras do deck",
-    example: "50 cartas no main…",
     description: "Regras de construção de deck do jogo",
   },
   {
     key: "archetypes_context",
     label: "Arquetipos do meta",
-    example: "Red Hybrid, Blue Flare…",
-    description: "Lista completa dos arquetipos do meta atual",
+    description: "Lista completa dos arquetipos da snapshot ativa",
   },
 ];
 
@@ -66,6 +63,10 @@ type AutocompleteState = {
   selectedIdx: number;
 } | null;
 
+function truncate(str: string, max: number): string {
+  return str.length > max ? str.slice(0, max) + "…" : str;
+}
+
 export default function PromptEditor({
   gameId,
   promptId,
@@ -74,6 +75,7 @@ export default function PromptEditor({
   initialNotes = "",
   suggestedVersion,
   isCurrentlyActive = false,
+  realVariables,
 }: Props) {
   const router = useRouter();
 
@@ -227,9 +229,14 @@ export default function PromptEditor({
     }
   }, [promptId, router]);
 
-  const previewContent = VARIABLES.reduce((acc, v) => {
-    return acc.replaceAll(`{{${v.key}}}`, v.example);
-  }, content);
+  const previewContent = useMemo(() => {
+    return content
+      .replaceAll("{{game_name}}", realVariables.game_name)
+      .replaceAll("{{game_card_code_pattern}}", realVariables.game_card_code_pattern)
+      .replaceAll("{{game_card_code_examples}}", realVariables.game_card_code_examples)
+      .replaceAll("{{game_deck_rules}}", realVariables.game_deck_rules)
+      .replaceAll("{{archetypes_context}}", realVariables.archetypes_context);
+  }, [content, realVariables]);
 
   const filteredForDropdown = autocomplete
     ? VARIABLES.filter((v) => v.key.startsWith(autocomplete.query))
@@ -303,7 +310,7 @@ export default function PromptEditor({
                 >
                   <div className="font-mono text-xs text-primary">{`{{${v.key}}}`}</div>
                   <div className="text-[10px] text-muted-foreground/70">
-                    {v.label} · ex: {v.example}
+                    {v.label} · ex: {truncate(realVariables[v.key], 30)}
                   </div>
                 </button>
               ))}
@@ -354,7 +361,7 @@ export default function PromptEditor({
                         </span>
                       </div>
                       <p className="mt-1 text-xs font-medium text-foreground">{v.label}</p>
-                      <p className="text-[10px] text-muted-foreground/60">ex: {v.example}</p>
+                      <p className="text-[10px] text-muted-foreground/60">ex: {truncate(realVariables[v.key], 40)}</p>
                     </button>
                   ))}
                 </div>
@@ -377,7 +384,7 @@ export default function PromptEditor({
               </button>
             </div>
             <p className="text-[10px] text-muted-foreground/40 leading-snug -mt-1">
-              Variáveis substituídas por exemplos. O coach recebe valores reais.
+              Variáveis substituídas pelos valores reais do banco.
             </p>
             <div className="min-h-[200px] max-h-[640px] overflow-y-auto rounded-xl border border-border/40 bg-card/30 p-4">
               {content.trim() ? (

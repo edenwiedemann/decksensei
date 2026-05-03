@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { pool } from "@workspace/db";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getPromptVariables, type PromptVariables } from "@/lib/analysis-prompt";
 import PromptEditor from "../_components/PromptEditor";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,19 @@ export default async function NewPromptPage() {
 
   const gameId = "digimon";
   const suggestedVersion = await getNextSuggestedVersion(gameId);
+
+  let realVariables: PromptVariables;
+  try {
+    realVariables = await getPromptVariables(gameId);
+  } catch {
+    realVariables = {
+      game_name: gameId,
+      game_card_code_pattern: "",
+      game_card_code_examples: "",
+      game_deck_rules: "",
+      archetypes_context: "(snapshot de meta não configurada)",
+    };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
@@ -47,6 +61,7 @@ export default async function NewPromptPage() {
           initialContent=""
           initialVersion={suggestedVersion}
           initialNotes=""
+          realVariables={realVariables}
         />
       </main>
     </div>

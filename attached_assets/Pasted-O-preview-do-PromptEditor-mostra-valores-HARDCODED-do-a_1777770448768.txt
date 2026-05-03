@@ -1,0 +1,129 @@
+O preview do PromptEditor mostra valores HARDCODED do array VARIABLES dentro
+do componente — não os valores reais do banco. Resultado: quando vier Lorcana,
+o admin vai ver "Digimon Card Game" no preview mas o coach receberá "Lorcana
+TCG". Mismatch silencioso.
+
+Refatora pra que o preview use os valores REAIS que o lib/analysis-prompt.ts
+injetaria em runtime.
+
+Mudanças:
+
+1. Em artifacts/decksensei/lib/analysis-prompt.ts, exporta uma função nova
+   getPromptVariables(gameId) que retorna os valores que substituem cada
+   placeholder, SEM montar o prompt completo:
+
+   export interface PromptVariables {
+     game_name: string;
+     game_card_code_pattern: string;
+     game_card_code_examples: string;
+     game_deck_rules: string;
+     archetypes_context: string;
+   }
+
+   export async function getPromptVariables(gameId: string): Promise<PromptVariables> {
+     const [game, globalSnapshot, localSnapshot] = await Promise.all([
+       getGame(gameId),
+       getActiveGlobalSnapshot(gameId),
+       getActiveLocalSnapshot(gameId),
+     ]);
+
+     const gameConfig = typeof game.config === "string"
+       ? (JSON.parse(game.config) as GameConfigForPrompt)
+       : (game.config as GameConfigForPrompt);
+
+     const globalContent = globalSnapshot.jsonContent as MetaSnapshotContent;
+
+     return {
+       game_name: game.name,
+       game_card_code_pattern: gameConfig.card_code_pattern ?? "",
+       game_card_code_examples: (gameConfig.card_code_examples ?? []).join(", "),
+       game_deck_rules: formatDeckRules(gameConfig.deck_rules),
+       archetypes_context: formatArchetypesContext(globalContent, localSnapshot),
+     };
+   }
+
+   Reusa as funções formatDeckRules, formatArchetypesContext, getGame,
+   getActiveGlobalSnapshot, getActiveLocalSnapshot que já existem. NÃO
+   duplica lógica — só extrai a parte de "calcular valores" sem fazer a
+   substituição final no template do prompt.
+
+   Refatora buildAnalysisPrompt internamente pra usar getPromptVariables —
+   evita duplicação. Exemplo:
+
+   export async function buildAnalysisPrompt({...}): Promise<BuiltPrompt> {
+     const vars = await getPromptVariables(gameId);
+     const [game, prompt, globalSnapshot] = await Promise.all([...]);
+     const templateContent = systemContentOverride ?? prompt.systemContent;
+     const system = templateContent
+       .replace(/\{\{game_name\}\}/g, vars.game_name)
+       .replace(/\{\{game_card_code_pattern\}\}/g, vars.game_card_code_pattern)
+       .replace(/\{\{game_card_code_examples\}\}/g, vars.game_card_code_examples)
+       .replace(/\{\{game_deck_rules\}\}/g, vars.game_deck_rules)
+       .replace(/\{\{archetypes_context\}\}/g, vars.archetypes_context);
+     ...
+   }
+
+2. No server component pai do editor de prompt
+   (artifacts/decksensei/app/admin/prompts/[id]/edit/page.tsx e o /new),
+   chama getPromptVariables no servidor e passa como prop:
+
+   import { getPromptVariables } from "@/lib/analysis-prompt";
+   
+   const variables = await getPromptVariables(gameId);
+   
+   <PromptEditor
+     gameId={gameId}
+     promptId={...}
+     initialContent={...}
+     ...
+     realVariables={variables}   // ← novo prop
+   />
+
+3. No PromptEditor.tsx, aceita o novo prop:
+
+   interface Props {
+     ...
+     realVariables: PromptVariables;
+   }
+
+4. Usa realVariables na substituição do preview, em vez do array VARIABLES
+   hardcoded:
+
+   const previewContent = useMemo(() => {
+     return content
+       .replaceAll("{{game_name}}", realVariables.game_name)
+       .replaceAll("{{game_card_code_pattern}}", realVariables.game_card_code_pattern)
+       .replaceAll("{{game_card_code_examples}}", realVariables.game_card_code_examples)
+       .replaceAll("{{game_deck_rules}}", realVariables.game_deck_rules)
+       .replaceAll("{{archetypes_context}}", realVariables.archetypes_context);
+   }, [content, realVariables]);
+
+5. O array VARIABLES local pode CONTINUAR existindo apenas para metadados
+   da UI do painel "Campos disponíveis" (label e descrição de cada
+   variável). MAS o campo `example` agora vira referência cosmética — pode
+   trocar por uma versão derivada de realVariables, truncada pra caber:
+
+   const VARIABLES = [
+     {
+       key: "game_name",
+       label: "Nome do jogo",
+       description: "Nome completo do jogo da snapshot ativa",
+     },
+     ...
+   ];
+
+   No render do painel, em vez de "ex: {v.example}", mostra
+   "ex: {truncate(realVariables[v.key], 40)}" — assim o admin vê o valor
+   REAL truncado.
+
+6. Roda typecheck. Roda dev. Abre /admin/prompts/[id]/edit. Confirma:
+   - Preview agora mostra os valores reais do banco (não hardcoded).
+   - Painel "Campos disponíveis" mostra "ex: Digimon Card Game" (mesmo
+     valor que vai pro preview, vindo do mesmo lugar).
+   - Com snapshot Recife ativa, o {{archetypes_context}} no preview inclui
+     bloco "META LOCAL (RECIFE)".
+
+Aceitação chave: se eu mudar o nome do jogo no banco (UPDATE games SET
+name = 'Digimon Card Game (BT22)' WHERE id = 'digimon';) e refresh a
+página do admin, o preview mostra o novo nome — sem precisar editar
+código.

@@ -475,6 +475,48 @@ function formatUserMessage(
 // ─── Export principal ─────────────────────────────────────────────────────────
 
 /**
+ * Valores reais que substituem os placeholders em runtime.
+ * Exportado para que o painel admin possa mostrar o preview com dados reais do banco.
+ */
+export interface PromptVariables {
+  game_name: string;
+  game_card_code_pattern: string;
+  game_card_code_examples: string;
+  game_deck_rules: string;
+  archetypes_context: string;
+}
+
+/**
+ * Carrega e formata os valores que substituem cada {{placeholder}} no template.
+ * Não monta o prompt completo — apenas retorna os valores para cada variável.
+ * Reutilizado internamente por buildAnalysisPrompt e pelo painel admin.
+ *
+ * Lança `PromptBuildError` se o game ou a snapshot global não existirem.
+ */
+export async function getPromptVariables(gameId: string): Promise<PromptVariables> {
+  const [game, globalSnapshot, localSnapshot] = await Promise.all([
+    getGame(gameId),
+    getActiveGlobalSnapshot(gameId),
+    getActiveLocalSnapshot(gameId),
+  ]);
+
+  const gameConfig =
+    typeof game.config === "string"
+      ? (JSON.parse(game.config) as GameConfigForPrompt)
+      : (game.config as GameConfigForPrompt);
+
+  const globalContent = globalSnapshot.jsonContent as MetaSnapshotContent;
+
+  return {
+    game_name: game.name,
+    game_card_code_pattern: gameConfig.card_code_pattern ?? "",
+    game_card_code_examples: (gameConfig.card_code_examples ?? []).join(", "),
+    game_deck_rules: formatDeckRules(gameConfig.deck_rules),
+    archetypes_context: formatArchetypesContext(globalContent, localSnapshot),
+  };
+}
+
+/**
  * Constrói todo o contexto de prompt para o Claude:
  * - Carrega game, prompt ativo, snapshot global e snapshot local (opcional) do DB (cache 60 s).
  * - Substitui {{placeholders}} no system template.
@@ -502,39 +544,25 @@ export async function buildAnalysisPrompt({
    */
   systemContentOverride?: string;
 }): Promise<BuiltPrompt> {
-  // Carrega todos os recursos em paralelo (cacheados 60 s após 1ª chamada)
-  // A snapshot local pode retornar null sem lançar erro
-  const [game, prompt, globalSnapshot, localSnapshot] = await Promise.all([
-    getGame(gameId),
+  // Carrega em paralelo — tudo cacheado 60 s após 1ª chamada
+  const [vars, prompt, globalSnapshot] = await Promise.all([
+    getPromptVariables(gameId),
     getActivePrompt(gameId),
-    getActiveGlobalSnapshot(gameId),
-    getActiveLocalSnapshot(gameId),
+    getActiveGlobalSnapshot(gameId), // necessário para metaSnapshotId e archetypes
   ]);
-
-  const gameConfig =
-    typeof game.config === "string"
-      ? (JSON.parse(game.config) as GameConfigForPrompt)
-      : (game.config as GameConfigForPrompt);
 
   const globalContent = globalSnapshot.jsonContent as MetaSnapshotContent;
 
-  // Formata os blocos que substituem os placeholders
-  const deckRulesText = formatDeckRules(gameConfig.deck_rules);
-  const archetypesText = formatArchetypesContext(globalContent, localSnapshot);
-  const cardCodeExamples = (gameConfig.card_code_examples ?? []).join(", ");
-
-  // Se override fornecido (modo teste), usa em vez do template ativo
   const templateContent = systemContentOverride ?? prompt.systemContent;
 
-  // Substitui todos os {{placeholders}} no template do system
   const system = templateContent
-    .replace(/\{\{game_name\}\}/g, game.name)
-    .replace(/\{\{game_card_code_pattern\}\}/g, gameConfig.card_code_pattern ?? "")
-    .replace(/\{\{game_card_code_examples\}\}/g, cardCodeExamples)
-    .replace(/\{\{game_deck_rules\}\}/g, deckRulesText)
-    .replace(/\{\{archetypes_context\}\}/g, archetypesText);
+    .replace(/\{\{game_name\}\}/g, vars.game_name)
+    .replace(/\{\{game_card_code_pattern\}\}/g, vars.game_card_code_pattern)
+    .replace(/\{\{game_card_code_examples\}\}/g, vars.game_card_code_examples)
+    .replace(/\{\{game_deck_rules\}\}/g, vars.game_deck_rules)
+    .replace(/\{\{archetypes_context\}\}/g, vars.archetypes_context);
 
-  const userMessage = formatUserMessage(deck, enrichedCards, game.name);
+  const userMessage = formatUserMessage(deck, enrichedCards, vars.game_name);
 
   return {
     system,
