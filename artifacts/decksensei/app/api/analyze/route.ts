@@ -135,6 +135,9 @@ export async function POST(request: NextRequest) {
 
   const isAuthenticated = isAdmin || !!cookieStore.get("session_token")?.value;
 
+  // Anônimos recebem análise parcial (só "## Visão geral") — gate de conversão
+  const isPartialStream = !isAuthenticated && !isAdmin;
+
   // ── 0. Rate limiting ──────────────────────────────────────────────────────
   let shouldSetCountCookie = false;
 
@@ -347,9 +350,14 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   const encoder = new TextEncoder();
 
+  // Marcador que delimita o fim do preview gratuito
+  const PARTIAL_MARKER = "\n## Plano de jogo";
+
   const readableStream = new ReadableStream({
     async start(controller) {
       let fullText = "";
+      let sentLength = 0;
+      let streamTruncated = false;
 
       try {
         const stream = anthropic.messages.stream({
@@ -367,40 +375,79 @@ export async function POST(request: NextRequest) {
           ) {
             const text = event.delta.text;
             fullText += text;
+
+            // ── Gate de conversão: trunca no início de "## Plano de jogo" ──
+            if (isPartialStream && !streamTruncated) {
+              const markerIdx = fullText.indexOf(PARTIAL_MARKER);
+              if (markerIdx !== -1) {
+                // Envia apenas o trecho ainda não enviado até o marcador
+                const toSend = fullText.slice(sentLength, markerIdx);
+                if (toSend) controller.enqueue(encoder.encode(toSend));
+                sentLength = markerIdx;
+                streamTruncated = true;
+                break;
+              }
+            }
+
             controller.enqueue(encoder.encode(text));
+            sentLength += text.length;
           }
         }
 
-        const finalMessage = await stream.finalMessage();
         const responseTimeMs = Date.now() - startTime;
-        const inputTokens = finalMessage.usage.input_tokens;
-        const outputTokens = finalMessage.usage.output_tokens;
+        const textToStore = streamTruncated
+          ? fullText.slice(0, fullText.indexOf(PARTIAL_MARKER))
+          : fullText;
 
-        // ── 5. Persiste análise no DB (best-effort) ───────────────────
-        try {
-          const similarArchetypeId = extractSimilarArchetype(
-            fullText,
-            built.archetypes,
-          );
+        if (!streamTruncated) {
+          // ── Análise completa: usa finalMessage para tokens reais ──────
+          const finalMessage = await stream.finalMessage();
+          const inputTokens = finalMessage.usage.input_tokens;
+          const outputTokens = finalMessage.usage.output_tokens;
 
-          await db.insert(analysesTable).values({
-            id: analysisId,
-            gameId,
-            deckText: deckToText(deck),
-            deckParsed: deck as unknown as Record<string, unknown>,
-            analysisText: fullText,
-            promptVersionId: built.promptVersionId,
-            metaSnapshotId: built.metaSnapshotId,
-            similarArchetypeId,
-            responseTimeMs,
-            deckName,
-          });
-        } catch (dbErr) {
-          console.error("[analyze] falha ao salvar análise no DB:", dbErr);
+          // ── 5. Persiste análise no DB (best-effort) ───────────────────
+          try {
+            const similarArchetypeId = extractSimilarArchetype(
+              textToStore,
+              built.archetypes,
+            );
+            await db.insert(analysesTable).values({
+              id: analysisId,
+              gameId,
+              deckText: deckToText(deck),
+              deckParsed: deck as unknown as Record<string, unknown>,
+              analysisText: textToStore,
+              promptVersionId: built.promptVersionId,
+              metaSnapshotId: built.metaSnapshotId,
+              similarArchetypeId,
+              responseTimeMs,
+              deckName,
+            });
+          } catch (dbErr) {
+            console.error("[analyze] falha ao salvar análise no DB:", dbErr);
+          }
+
+          // ── 6. Rastreia custo com tokens reais da API ─────────────────
+          await trackCost(inputTokens, outputTokens, analysisId);
+        } else {
+          // ── Análise parcial: persiste preview no DB (sem custo tracking) ─
+          try {
+            await db.insert(analysesTable).values({
+              id: analysisId,
+              gameId,
+              deckText: deckToText(deck),
+              deckParsed: deck as unknown as Record<string, unknown>,
+              analysisText: textToStore,
+              promptVersionId: built.promptVersionId,
+              metaSnapshotId: built.metaSnapshotId,
+              similarArchetypeId: null,
+              responseTimeMs,
+              deckName,
+            });
+          } catch (dbErr) {
+            console.error("[analyze] falha ao salvar análise parcial no DB:", dbErr);
+          }
         }
-
-        // ── 6. Rastreia custo com tokens reais da API ─────────────────
-        await trackCost(inputTokens, outputTokens, analysisId);
       } catch (err) {
         logAnthropicError(analysisId, err);
         controller.error(new Error("stream_error"));
@@ -418,6 +465,7 @@ export async function POST(request: NextRequest) {
     "X-Analysis-Id": analysisId,
     "X-Meta-Color-Map": colorMapHeader,
     "X-Enrichment-Coverage": String(enrichmentPct),
+    "X-Partial-Analysis": isPartialStream ? "true" : "false",
   });
 
   if (shouldSetCountCookie) {

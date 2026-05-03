@@ -10,6 +10,7 @@ import { computeDeckGrade, type DeckGrade } from "@/lib/deck-score";
 import AnalysisStream from "./AnalysisStream";
 import FeaturedModal from "./FeaturedModal";
 import AuthRequiredModal from "./AuthRequiredModal";
+import PartialAnalysisGate from "./PartialAnalysisGate";
 
 interface DeckInputProps {
   placeholder: string;
@@ -53,6 +54,8 @@ interface AnalysisState {
   failedCards: string[];
   /** Grade calculado do texto da análise atual. */
   currentGrade: DeckGrade | null;
+  /** Análise parcial entregue a visitantes anônimos (gate de conversão). */
+  isPartial: boolean;
 }
 
 const IDLE: AnalysisState = {
@@ -68,6 +71,7 @@ const IDLE: AnalysisState = {
   elapsedSec: null,
   failedCards: [],
   currentGrade: null,
+  isPartial: false,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -402,6 +406,23 @@ export default function DeckInput({
       const streamStartMs = Date.now();
       setAnalysis({ ...IDLE, phase: "streaming", failedCards });
 
+      // Salva deck para auto-resume ANTES do stream (visitantes anônimos)
+      // Garante que o pending_deck esteja disponível mesmo se o usuário sair
+      // durante o streaming ou ao ver o gate de conversão.
+      if (!usageCount?.isAuthenticated) {
+        try {
+          localStorage.setItem(
+            `pending_deck_${gameConfig.id}`,
+            JSON.stringify({
+              deck,
+              deckName: deckName.trim() || null,
+              tournamentMode,
+              analysisId: null,
+            }),
+          );
+        } catch {}
+      }
+
       let res: Response;
       try {
         res = await fetch("/api/analyze", {
@@ -458,6 +479,7 @@ export default function DeckInput({
       const analysisId = res.headers.get("X-Analysis-Id") ?? "";
       const enrichmentPctRaw = res.headers.get("X-Enrichment-Coverage");
       const enrichmentPct = enrichmentPctRaw !== null ? parseInt(enrichmentPctRaw, 10) : null;
+      const isPartial = res.headers.get("X-Partial-Analysis") === "true";
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -479,7 +501,7 @@ export default function DeckInput({
         try { localStorage.setItem(`ds_prev_grade_${gameConfig.id}`, currentGrade); } catch {}
       }
 
-      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct, elapsedSec, failedCards, currentGrade });
+      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct, elapsedSec, failedCards, currentGrade, isPartial });
 
       // Salva análise + deck no localStorage (24h)
       try {
@@ -714,19 +736,27 @@ export default function DeckInput({
       {/* Área de análise */}
       {showAnalysisArea && (
         <div ref={analysisAreaRef} className="border-t border-border/30 pt-4">
-          <AnalysisStream
-            text={analysis.text}
-            phase={phase as "enriching" | "streaming" | "done"}
-            enrichProgress={analysis.enrichProgress}
-            colorMap={analysis.colorMap}
-            analysisId={analysis.analysisId}
-            gameId={gameConfig.id}
-            onReset={handleReset}
-            elapsedSec={analysis.elapsedSec}
-            metaSnapshotAgeDays={metaSnapshotAgeDays}
-            currentGrade={analysis.currentGrade}
-            previousGrade={previousGrade}
-          />
+          {analysis.isPartial && phase === "done" ? (
+            <PartialAnalysisGate
+              text={analysis.text}
+              colorMap={analysis.colorMap}
+              onOpenAuth={() => setShowAuthModal(true)}
+            />
+          ) : (
+            <AnalysisStream
+              text={analysis.text}
+              phase={phase as "enriching" | "streaming" | "done"}
+              enrichProgress={analysis.enrichProgress}
+              colorMap={analysis.colorMap}
+              analysisId={analysis.analysisId}
+              gameId={gameConfig.id}
+              onReset={handleReset}
+              elapsedSec={analysis.elapsedSec}
+              metaSnapshotAgeDays={metaSnapshotAgeDays}
+              currentGrade={analysis.currentGrade}
+              previousGrade={previousGrade}
+            />
+          )}
         </div>
       )}
 
