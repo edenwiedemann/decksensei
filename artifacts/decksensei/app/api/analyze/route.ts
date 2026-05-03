@@ -29,7 +29,7 @@ import {
 } from "@/lib/analysis-prompt";
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { trackCost, checkDailyCap } from "@/lib/cost-tracker";
+import { trackCost, checkProductionCap } from "@/lib/cost-tracker";
 
 // ─── Configuração do modelo ───────────────────────────────────────────────────
 
@@ -247,11 +247,11 @@ export async function POST(request: NextRequest) {
   const colorMapHeader = encodeURIComponent(JSON.stringify(colorMap));
 
   // ── 3c. Verifica cap de custo diário ──────────────────────────────────
-  let capCheck: Awaited<ReturnType<typeof checkDailyCap>>;
+  let capCheck: Awaited<ReturnType<typeof checkProductionCap>>;
   try {
-    capCheck = await checkDailyCap();
+    capCheck = await checkProductionCap();
   } catch (err) {
-    console.error("[analyze] checkDailyCap falhou:", err);
+    console.error("[analyze] checkProductionCap falhou:", err);
     capCheck = { allowed: true, currentUsd: 0, capUsd: 10 };
   }
 

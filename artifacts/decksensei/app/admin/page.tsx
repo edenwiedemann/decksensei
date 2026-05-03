@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { pool } from "@workspace/db";
-import { getDailyCost } from "@/lib/cost-tracker";
+import { getDailyProductionCost, getDailyTestCost } from "@/lib/cost-tracker";
 import { requireAdminCookie } from "@/lib/auth/admin";
 import { getGames } from "@/lib/games/list";
 import GameSelector from "./_components/GameSelector";
@@ -51,24 +51,27 @@ export default async function AdminDashboardPage({
   const [sp, games] = await Promise.all([searchParams, getGames()]);
   const currentGame = sp.game ?? games[0]?.id ?? "digimon";
 
-  const [totalUsers, analysesToday, feedbackPct, dailyCostUsd] =
+  const [totalUsers, analysesToday, feedbackPct, prodCostUsd, testCostUsd] =
     await Promise.all([
       getTotalUsers().catch(() => null),
       getAnalysesToday().catch(() => null),
       getPositiveFeedbackPct().catch(() => null),
-      getDailyCost().catch(() => null),
+      getDailyProductionCost().catch(() => null),
+      getDailyTestCost().catch(() => null),
     ]);
 
-  const capUsd = parseFloat(process.env.DAILY_COST_CAP_USD ?? "10");
-  const costPct =
-    dailyCostUsd != null ? Math.min(100, (dailyCostUsd / capUsd) * 100) : 0;
+  const prodCapUsd = parseFloat(process.env.DAILY_COST_CAP_USD ?? "10");
+  const testCapUsd = parseFloat(process.env.TEST_DAILY_COST_CAP_USD ?? "2");
 
-  const costColor =
-    costPct >= 90
-      ? "bg-red-500"
-      : costPct >= 65
-        ? "bg-amber-400"
-        : "bg-primary";
+  const prodPct = prodCostUsd != null ? Math.min(100, (prodCostUsd / prodCapUsd) * 100) : 0;
+  const testPct = testCostUsd != null ? Math.min(100, (testCostUsd / testCapUsd) * 100) : 0;
+
+  function capColor(pct: number) {
+    return pct >= 90 ? "bg-red-500" : pct >= 65 ? "bg-amber-400" : "bg-primary";
+  }
+  function capTextColor(pct: number) {
+    return pct >= 90 ? "text-red-400" : pct >= 65 ? "text-amber-400" : "text-muted-foreground";
+  }
 
   const NAV_LINKS = [
     { href: `/admin/games`,                           label: "Jogos",       desc: "Cadastrar e editar jogos suportados",  icon: "🎮" },
@@ -126,39 +129,53 @@ export default async function AdminDashboardPage({
             </p>
           </StatCard>
 
-          {/* Custo diário */}
-          <StatCard title="Custo USD — hoje" icon="💲">
+          {/* Custo produção hoje */}
+          <StatCard title="Custo produção — hoje" icon="💲">
             <BigNumber
-              value={
-                dailyCostUsd != null
-                  ? `$${dailyCostUsd.toFixed(4)}`
-                  : null
-              }
+              value={prodCostUsd != null ? `$${prodCostUsd.toFixed(4)}` : null}
             />
             <div className="mt-3 flex flex-col gap-1.5">
-              {/* Barra de progresso */}
               <div className="h-2 w-full overflow-hidden rounded-full bg-border/30">
                 <div
-                  className={`h-full rounded-full transition-all ${costColor}`}
-                  style={{ width: `${costPct}%` }}
+                  className={`h-full rounded-full transition-all ${capColor(prodPct)}`}
+                  style={{ width: `${prodPct}%` }}
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                cap diário:{" "}
-                <span className="font-medium text-foreground">${capUsd}</span>
-                {dailyCostUsd != null && (
+                cap:{" "}
+                <span className="font-medium text-foreground">${prodCapUsd}</span>
+                {prodCostUsd != null && (
                   <>
                     {" "}·{" "}
-                    <span
-                      className={
-                        costPct >= 90
-                          ? "text-red-400"
-                          : costPct >= 65
-                            ? "text-amber-400"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {costPct.toFixed(1)}% usado
+                    <span className={capTextColor(prodPct)}>
+                      {prodPct.toFixed(1)}% usado
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          </StatCard>
+
+          {/* Custo testes hoje */}
+          <StatCard title="Custo testes — hoje" icon="🧪">
+            <BigNumber
+              value={testCostUsd != null ? `$${testCostUsd.toFixed(4)}` : null}
+            />
+            <div className="mt-3 flex flex-col gap-1.5">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-border/30">
+                <div
+                  className={`h-full rounded-full transition-all ${capColor(testPct)}`}
+                  style={{ width: `${testPct}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                cap:{" "}
+                <span className="font-medium text-foreground">${testCapUsd}</span>
+                {testCostUsd != null && (
+                  <>
+                    {" "}·{" "}
+                    <span className={capTextColor(testPct)}>
+                      {testPct.toFixed(1)}% usado
                     </span>
                   </>
                 )}
