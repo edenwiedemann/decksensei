@@ -421,7 +421,7 @@ export default function DeckInput({
       console.error("[analyze]", err);
       setAnalysis({ ...IDLE, phase: "error", error: "A conexão caiu no meio da análise — tenta de novo em alguns segundos." });
     }
-  }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules, deck]);
+  }, [parsed, isReady, gameConfig.id, gameConfig.deck_rules, deck, deckName, tournamentMode]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
