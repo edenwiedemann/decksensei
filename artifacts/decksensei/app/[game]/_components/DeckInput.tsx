@@ -206,6 +206,7 @@ export default function DeckInput({
         elapsedSec?: number | null;
         deckText?: string;
         savedAt?: number;
+        isPartial?: boolean;
       };
 
       const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -226,6 +227,7 @@ export default function DeckInput({
           enrichmentPct: data.enrichmentPct ?? null,
           elapsedSec: data.elapsedSec ?? null,
           currentGrade: computeDeckGrade(data.text)?.grade ?? null,
+          isPartial: data.isPartial ?? false,
         });
       }
     } catch {}
@@ -507,7 +509,7 @@ export default function DeckInput({
       try {
         localStorage.setItem(
           `ds_analysis_${gameConfig.id}`,
-          JSON.stringify({ text: fullText, analysisId, colorMap, enrichmentPct, elapsedSec, deckText: deck, savedAt: Date.now() }),
+          JSON.stringify({ text: fullText, analysisId, colorMap, enrichmentPct, elapsedSec, deckText: deck, savedAt: Date.now(), isPartial }),
         );
       } catch {}
     } catch (err) {

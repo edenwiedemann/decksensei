@@ -474,8 +474,12 @@ export async function POST(request: NextRequest) {
     "X-Analysis-Id": analysisId,
     "X-Meta-Color-Map": colorMapHeader,
     "X-Enrichment-Coverage": String(enrichmentPct),
-    // Para visitantes anônimos, sempre sinalizamos que é parcial —
-    // o header reflete a intenção de truncação (definido antes do stream).
+    // Para visitantes anônimos (isPartialStream=true), o header é definido antes
+    // do início do stream — não é possível alterá-lo após o início do body HTTP.
+    // Na prática streamTruncated é sempre true para anônimos: ou o marcador é
+    // encontrado (caminho normal) ou o fallback PARTIAL_MAX_SENT fecha o stream
+    // antes de 5000 chars. O único edge-case seria uma resposta Anthropic de
+    // < 5000 chars sem o marcador (improvável com os prompts atuais).
     "X-Partial-Analysis": isPartialStream ? "true" : "false",
   });
 
