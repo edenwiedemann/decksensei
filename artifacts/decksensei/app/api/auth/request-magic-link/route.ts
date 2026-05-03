@@ -50,7 +50,6 @@ function buildMagicLinkEmail(link: string, email: string): { html: string; text:
       </h1>
       <p style="font-size:15px;line-height:1.65;color:#94a3b8;margin:0 0 28px;">
         Clica no botão abaixo para entrar no Deck Sensei.
-        O link é válido por <strong style="color:#e2e8f0;">15 minutos</strong> e só pode ser usado uma vez.
       </p>
 
       <!-- CTA Button -->
@@ -70,10 +69,11 @@ function buildMagicLinkEmail(link: string, email: string): { html: string; text:
 
     <!-- Footer -->
     <div style="border-top:1px solid #1f2937;padding:20px 0 0;">
-      <p style="font-size:12px;line-height:1.6;color:#374151;margin:0 0 6px;">
-        Se não foi você que pediu esse link, ignore este email — nenhuma ação é necessária.
+      <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:0 0 6px;">
+        O link expira em <strong style="color:#9ca3af;">15 minutos</strong> e só pode ser usado uma vez.
+        Se não foi você que pediu, ignore este email — nenhuma ação é necessária.
       </p>
-      <p style="font-size:11px;color:#1f2937;margin:0;">
+      <p style="font-size:11px;color:#6b7280;margin:0;">
         Enviado para ${email} · Deck Sensei
       </p>
     </div>
