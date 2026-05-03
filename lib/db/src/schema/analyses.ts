@@ -47,6 +47,9 @@ export const analysesTable = pgTable(
     index("analyses_game_id_idx").on(t.gameId),
     index("analyses_user_id_idx").on(t.userId),
     index("analyses_created_at_idx").on(t.createdAt),
+    index("analyses_featured_idx")
+      .on(t.gameId, t.isFeatured)
+      .where(sql`${t.isFeatured} = true AND ${t.deletedAt} IS NULL`),
   ],
 );
 
