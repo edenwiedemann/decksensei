@@ -99,6 +99,7 @@ export default function DeckInput({
 
   const abortRef = useRef<AbortController | null>(null);
   const analysisAreaRef = useRef<HTMLDivElement>(null);
+  const deckFromUrlRef = useRef(false);
 
   // ── Auto-resume após magic-link ───────────────────────────────────────────
   useEffect(() => {
@@ -121,9 +122,42 @@ export default function DeckInput({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Lê o deck do parâmetro ?deck= da URL (vindo da permalink) ───────────
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get("deck");
+      if (!encoded) return;
+
+      // Remove o param da URL sem recarregar a página
+      params.delete("deck");
+      const newSearch = params.toString();
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + (newSearch ? `?${newSearch}` : ""),
+      );
+
+      // Decodifica base64url → UTF-8
+      const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+      const binary = atob(padded);
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      const decoded = new TextDecoder().decode(bytes);
+      if (decoded.trim()) {
+        deckFromUrlRef.current = true;
+        setDeck(decoded);
+        setIsUntouchedExample(false);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Restaura localStorage (análise + deck) ou exibe deck de exemplo ───────
   useEffect(() => {
     if (autoResume) return;
+    // Se o deck já foi pré-preenchido via URL (?deck=), não sobrescrever
+    if (deckFromUrlRef.current) return;
     try {
       // Carrega grade anterior para mostrar diff
       const prevGradeRaw = localStorage.getItem(`ds_prev_grade_${gameConfig.id}`);

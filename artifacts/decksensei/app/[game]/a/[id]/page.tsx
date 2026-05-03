@@ -1,8 +1,9 @@
-import { db, analysesTable, gamesTable, isNull, eq, and } from "@workspace/db";
+import { db, analysesTable, gamesTable, metaSnapshotsTable, isNull, eq, and } from "@workspace/db";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import AnalysisResult from "../../_components/AnalysisResult";
+import MetaOutdatedBanner from "../../_components/MetaOutdatedBanner";
 import { computeDeckGrade } from "@/lib/deck-score";
 import { getSessionUser, SESSION_COOKIE } from "@/lib/auth/session";
 import DeckNameEditor from "./_components/DeckNameEditor";
@@ -44,7 +45,9 @@ async function getAnalysis(id: string, gameId: string) {
       gameId: analysesTable.gameId,
       userId: analysesTable.userId,
       deckName: analysesTable.deckName,
+      deckText: analysesTable.deckText,
       similarArchetypeId: analysesTable.similarArchetypeId,
+      metaSnapshotId: analysesTable.metaSnapshotId,
       createdAt: analysesTable.createdAt,
       gameName: gamesTable.name,
     })
@@ -60,6 +63,20 @@ async function getAnalysis(id: string, gameId: string) {
     .limit(1);
 
   return row ?? null;
+}
+
+async function getActiveSnapshotId(gameId: string): Promise<number | null> {
+  const [row] = await db
+    .select({ id: metaSnapshotsTable.id })
+    .from(metaSnapshotsTable)
+    .where(
+      and(
+        eq(metaSnapshotsTable.gameId, gameId),
+        eq(metaSnapshotsTable.active, true),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
 }
 
 // ─── Metadata / Open Graph ────────────────────────────────────────────────────
@@ -114,12 +131,16 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 export default async function SharedAnalysisPage({ params }: PageParams) {
   const { game, id } = await params;
 
-  const [analysis, cookieStore] = await Promise.all([
+  const [analysis, activeSnapshotId, cookieStore] = await Promise.all([
     getAnalysis(id, game),
+    getActiveSnapshotId(game),
     cookies(),
   ]);
 
   if (!analysis) notFound();
+
+  const metaOutdated =
+    activeSnapshotId !== null && analysis.metaSnapshotId !== activeSnapshotId;
 
   const grade = computeDeckGrade(analysis.analysisText);
 
@@ -175,6 +196,11 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
 
       {/* Conteúdo */}
       <main className="mx-auto max-w-2xl px-6 py-12 pb-28">
+        {/* Banner de meta desatualizado */}
+        {metaOutdated && (
+          <MetaOutdatedBanner deckText={analysis.deckText} gameId={game} />
+        )}
+
         {/* Título do deck */}
         <div className="mb-6 flex flex-col gap-2">
           {isOwner ? (
