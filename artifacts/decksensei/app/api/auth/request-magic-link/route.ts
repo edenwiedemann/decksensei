@@ -25,6 +25,78 @@ const resend = new Resend(env.RESEND_API_KEY);
 
 const OK = NextResponse.json({ ok: true }, { status: 200 });
 
+// ─── Email HTML de autenticação ───────────────────────────────────────────────
+
+function buildMagicLinkEmail(link: string, email: string): { html: string; text: string } {
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Seu link de acesso — Deck Sensei</title>
+</head>
+<body style="background:#0f1117;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:20px;">
+  <div style="max-width:520px;margin:0 auto;">
+
+    <!-- Header -->
+    <div style="padding:28px 0 22px;border-bottom:1px solid #1f2937;">
+      <span style="font-size:20px;font-weight:700;color:#f9fafb;letter-spacing:-0.3px;">Deck Sensei</span>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:36px 0 28px;">
+      <h1 style="font-size:22px;font-weight:700;color:#f1f5f9;margin:0 0 12px;letter-spacing:-0.3px;">
+        Seu link de acesso chegou
+      </h1>
+      <p style="font-size:15px;line-height:1.65;color:#94a3b8;margin:0 0 28px;">
+        Clica no botão abaixo para entrar no Deck Sensei.
+        O link é válido por <strong style="color:#e2e8f0;">15 minutos</strong> e só pode ser usado uma vez.
+      </p>
+
+      <!-- CTA Button -->
+      <div style="text-align:center;margin:0 0 28px;">
+        <a href="${link}"
+           style="display:inline-block;background:#6366f1;color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600;letter-spacing:0.01em;line-height:1;">
+          Entrar no Deck Sensei →
+        </a>
+      </div>
+
+      <!-- Fallback link -->
+      <p style="font-size:12px;line-height:1.6;color:#4b5563;margin:0;text-align:center;">
+        Botão não funcionou? Copia e cola esse link no navegador:<br>
+        <a href="${link}" style="color:#6366f1;word-break:break-all;">${link}</a>
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top:1px solid #1f2937;padding:20px 0 0;">
+      <p style="font-size:12px;line-height:1.6;color:#374151;margin:0 0 6px;">
+        Se não foi você que pediu esse link, ignore este email — nenhuma ação é necessária.
+      </p>
+      <p style="font-size:11px;color:#1f2937;margin:0;">
+        Enviado para ${email} · Deck Sensei
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  const text = [
+    "Olá!",
+    "",
+    "Seu link de acesso ao Deck Sensei:",
+    link,
+    "",
+    "Esse link expira em 15 minutos e só pode ser usado uma vez.",
+    "Se não foi você, ignore esse email.",
+    "",
+    "— Deck Sensei",
+  ].join("\n");
+
+  return { html, text };
+}
+
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
@@ -86,22 +158,15 @@ export async function POST(req: NextRequest) {
 
     // 5. Envia email
     const link = `${env.APP_URL}/auth/verify?token=${token}`;
+    const { html, text } = buildMagicLinkEmail(link, normalizedEmail);
 
     try {
       await resend.emails.send({
         from: "Deck Sensei <noreply@decksensei.com.br>",
         to: normalizedEmail,
         subject: "Seu link de acesso ao Deck Sensei",
-        text: [
-          "Olá!",
-          "",
-          `Clica aqui pra entrar: ${link}`,
-          "",
-          "Esse link expira em 15 minutos.",
-          "Se não foi você, ignore esse email.",
-          "",
-          "— Deck Sensei",
-        ].join("\n"),
+        html,
+        text,
       });
     } catch (emailErr) {
       console.error("[request-magic-link] Resend error:", emailErr);
