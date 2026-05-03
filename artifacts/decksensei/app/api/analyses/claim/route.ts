@@ -12,14 +12,14 @@
 
 import { type NextRequest } from "next/server";
 import { cookies } from "next/headers";
-import { getSessionUser } from "@/lib/auth/session";
+import { getSessionUser, SESSION_COOKIE } from "@/lib/auth/session";
 import { db, analysesTable, eq, and, isNull } from "@workspace/db";
 
 const ANALYSIS_ID_RE = /^[A-Za-z0-9_-]{24}$/;
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("session_token")?.value;
+  const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
 
   if (!sessionToken) {
     return Response.json({ error: "Não autenticado." }, { status: 401 });

@@ -123,15 +123,19 @@ export default function DeckInput({
           setDeck(saved);
         }
         setPendingResume(true);
-        localStorage.removeItem(`pending_deck_${gameConfig.id}`);
 
         // Reivindica a análise anônima — silencioso, não bloqueia o resume
+        // localStorage só é removido após disparar o claim para não perder o token em falha transiente
         if (pendingAnalysisId) {
           fetch("/api/analyses/claim", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ analysisId: pendingAnalysisId }),
-          }).catch(() => {});
+          }).catch(() => {}).finally(() => {
+            try { localStorage.removeItem(`pending_deck_${gameConfig.id}`); } catch {}
+          });
+        } else {
+          localStorage.removeItem(`pending_deck_${gameConfig.id}`);
         }
       }
     } catch {}
