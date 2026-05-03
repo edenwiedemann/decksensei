@@ -1,0 +1,195 @@
+Implementa as 4 pipelines de coleta da Bandai (peso 75-100). Estrutura
+arquitetural completa em pipelines-evidencias.md.
+
+═══ PARTE 1: Atualizar games.config com evidence_sources e archetype_aliases ═══
+
+1. Crie migração de seed que UPDATE games SET config = config || jsonb que
+   adiciona dois blocos novos pro game 'digimon':
+
+   evidence_sources: [
+     {
+       id: "bandai-worlds-final",
+       label: "Bandai — World Championship Final",
+       weight: 100,
+       type: "publisher_official",
+       auto_verified: true,
+       url_pattern: "world.digimoncard.com/report/.*world.*final.*"
+     },
+     { id: "bandai-regionals", label: "Bandai — Regionals", weight: 90, type: "publisher_official", auto_verified: true, url_pattern: "world.digimoncard.com/report/.*regional.*" },
+     { id: "bandai-ultimate-cup", label: "Bandai — Ultimate Cup", weight: 85, type: "publisher_official", auto_verified: true, url_pattern: "world.digimoncard.com/report/.*ultimate.*cup.*" },
+     { id: "bandai-store-championship", label: "Bandai — Store Championship", weight: 75, type: "publisher_official", auto_verified: true, url_pattern: "world.digimoncard.com/report/.*store.*cs.*" },
+     { id: "digimonmeta-review", label: "DigimonMeta.com (review editorial)", weight: 70, type: "editorial_curated", auto_verified: true },
+     { id: "limitless-tcg", label: "Limitless TCG (agregador)", weight: 50, type: "aggregator_with_proof", auto_verified: false, min_sample_size: 100 },
+     { id: "digimoncard-io", label: "DigimonCard.io (self-reported)", weight: 25, type: "self_reported", auto_verified: false, min_sample_size: 200 },
+     { id: "local-meta-recife", label: "Meta local Recife", weight: 30, weight_local_override: 95, type: "local_curated", auto_verified: false }
+   ]
+
+   archetype_aliases: {
+     "royal_knights": ["Royal Knights", "ロイヤルナイツ", "RK"],
+     "sakuyamon": ["Sakuyamon", "サクヤモン"],
+     "blue_green_imperialdramon": ["Blue Green Imperialdramon", "BG Imperial", "Imperialdramon Azul/Verde"],
+     "purple_hybrid": ["Purple Hybrid", "Híbridos Roxos"],
+     "megidramon": ["Megidramon", "メギドラモン"],
+     "vemmon": ["Vemmon", "ヴェムモン"],
+     "red_phoenixmon": ["Red Phoenixmon", "Phoenixmon"],
+     "adventure": ["Adventure", "Tai and core card"],
+     "hudiemon": ["Hudiemon", "フーディエモン"],
+     "ts_jupitermon": ["TS Jupitermon", "TSユピテルモン"],
+     "leviamon": ["Leviamon", "リヴァイアモン"],
+     "medusamon": ["Medusamon", "メデューサモン"],
+     "ts_iliad": ["TS Iliad", "TSイリアス"],
+     "cendrillmon": ["Cendrillmon", "サンドリモン"],
+     "ts_abyss_area": ["TS Abyss Area", "TSアビスエリア"],
+     "pyramidimon": ["Pyramidimon", "ピラミディモン"]
+   }
+
+═══ PARTE 2: Pipeline base Bandai compartilhada ═══
+
+Cria lib/evidence/pipelines/bandai/shared.ts com lógica reutilizada pelas 4
+pipelines (descobrir reports, parsear player.php, mapear aliases):
+
+  1. discoverReports(eventTypePattern: RegExp) — fetch
+     world.digimoncard.com/event/, parseia HTML procurando 
+     `<a href="/report/...">`, retorna lista de URLs novos (não vistos
+     antes — verifica via meta_archetype_evidences.url) que casam com 
+     eventTypePattern.
+
+  2. parseReportPage(reportUrl) — fetch report URL, extrai:
+     - eventLabel (h1 do report ou title)
+     - eventDate (do título/conteúdo, formato YYYY-MM-DD)
+     - playerListUrl (link "View deck recipes of all participants")
+     - topPlacements (Champion/Runner-Up/3rd se mencionados)
+
+  3. parsePlayerListPage(playerListUrl) — fetch, parseia tabelas com
+     headers "Player Name | Area | Deck", retorna:
+     [{ playerName, area, deckName }, ...]
+
+  4. mapDeckNameToArchetypeId(deckName, aliases) — normaliza (trim,
+     case-insensitive), tenta match contra cada alias do dicionário.
+     Se não casar, registra em unmatched_archetype_names (jsonb num arquivo
+     temp) pra revisão manual. Retorna archetypeId ou null.
+
+  5. aggregateAppearances(participants, aliases) — agrupa por archetypeId,
+     conta appearances, calcula share_pct (count/total*100).
+
+  6. importEventReport(sourceId, reportUrl) — combina tudo:
+     a. parseReportPage(reportUrl)
+     b. parsePlayerListPage(playerListUrl)
+     c. mapeia deckNames pra archetypeIds
+     d. agrega appearances
+     e. pra cada arquetipo, upsertEvidence({
+          gameId: "digimon",
+          archetypeId,
+          sourceId,
+          eventLabel,
+          eventDate,
+          url: reportUrl,
+          data: {
+            appearances,
+            share_pct,
+            sample_size: appearances,
+            placement: topPlacements[archetypeId] ?? null,
+            won_event: champion?.archetypeId === archetypeId,
+          },
+          verified: true,                           // bandai = auto_verified
+          verifiedBy: "bandai-auto-import",
+          verifiedAt: NOW(),
+        })
+
+═══ PARTE 3: Fingerprint validator Bandai ═══
+
+lib/evidence/pipelines/bandai/fingerprint.ts:
+
+  export async function validateBandaiFingerprint(): Promise<FingerprintCheck> {
+    const failures = [];
+    
+    // Test 1: página de eventos retorna HTML válido
+    const eventPageRes = await fetch("https://world.digimoncard.com/event/", { 
+      signal: AbortSignal.timeout(8000) 
+    });
+    if (!eventPageRes.ok) failures.push("Event page returned " + eventPageRes.status);
+    const html = await eventPageRes.text();
+    
+    // Test 2: tem pelo menos 1 link de report
+    if (!/<a[^>]+href="\/report\/[^"]+"/.test(html)) {
+      failures.push("Nenhum link /report/* encontrado na página de eventos");
+    }
+    
+    // Test 3: pega primeiro report e valida que tem link de player.php
+    const reportMatch = html.match(/href="(\/report\/[^"]+)"/);
+    if (reportMatch) {
+      const reportRes = await fetch("https://world.digimoncard.com" + reportMatch[1]);
+      const reportHtml = await reportRes.text();
+      if (!/player\.php|deck recipes of all participants/i.test(reportHtml)) {
+        failures.push("Report sample não tem link 'View deck recipes' — formato mudou");
+      }
+    } else {
+      failures.push("Não foi possível pegar report sample pra validar formato");
+    }
+    
+    return { ok: failures.length === 0, failures };
+  }
+
+═══ PARTE 4: 4 pipelines específicas ═══
+
+Cada uma é uma classe simples implementando EvidencePipeline. Diferença é só
+o eventTypePattern e sourceId:
+
+lib/evidence/pipelines/bandai/worlds-final.ts:
+
+  export class BandaiWorldsFinalPipeline implements EvidencePipeline {
+    sourceId = "bandai-worlds-final";
+    
+    async validateFingerprint() { return validateBandaiFingerprint(); }
+    
+    async import(): Promise<PipelineRun> {
+      const reports = await discoverReports(/world.*final/i);
+      let itemsImported = 0;
+      const archetypesUpdated = new Set<string>();
+      const warnings: string[] = [];
+      
+      for (const url of reports) {
+        try {
+          const result = await importEventReport(this.sourceId, url);
+          itemsImported += result.archetypeCount;
+          result.archetypeIds.forEach(id => archetypesUpdated.add(id));
+        } catch (err) {
+          warnings.push(`Falha em ${url}: ${(err as Error).message}`);
+        }
+      }
+      
+      return { itemsImported, archetypesUpdated: [...archetypesUpdated], warnings };
+    }
+  }
+
+Idem pra:
+- BandaiRegionalsPipeline (pattern /regional/i, sourceId "bandai-regionals")
+- BandaiUltimateCupPipeline (pattern /ultimate.*cup/i, sourceId "bandai-ultimate-cup")
+- BandaiStoreChampionshipPipeline (pattern /store.*(cs|championship)/i, sourceId "bandai-store-championship")
+
+═══ PARTE 5: Registra pipelines no /api/cron/evidences ═══
+
+Atualiza app/api/cron/evidences/route.ts pra incluir as 4 pipelines Bandai:
+
+  const pipelines: EvidencePipeline[] = [
+    new BandaiWorldsFinalPipeline(),
+    new BandaiRegionalsPipeline(),
+    new BandaiUltimateCupPipeline(),
+    new BandaiStoreChampionshipPipeline(),
+  ];
+
+═══ Aceitação ═══
+
+1. pnpm typecheck passa
+2. POST /api/cron/evidences/test/bandai-worlds-final (manual trigger)
+   processa pelo menos 1 report sem erro → cria evidências em
+   meta_archetype_evidences com sourceId="bandai-worlds-final" e
+   verified=true
+3. Confirma no banco: 
+   SELECT source_id, archetype_id, event_label, data->'appearances' 
+   FROM meta_archetype_evidences 
+   WHERE source_id LIKE 'bandai-%' 
+   ORDER BY event_date DESC LIMIT 20;
+4. Re-roda o mesmo trigger — confirma que NÃO duplica (UPSERT funcionou)
+5. Confirma que sourceId="bandai-worlds-final" tem peso 100 e
+   archetype_aliases populado em games.config pra digimon
