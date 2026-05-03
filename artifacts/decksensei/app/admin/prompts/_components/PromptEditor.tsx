@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import dynamic from "next/dynamic";
-import { commands } from "@uiw/react-md-editor";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,15 +15,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import TestModal from "./TestModal";
-
-const MDEditor = dynamic(() => import("@uiw/react-md-editor"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full min-h-[420px] items-center justify-center rounded-lg border border-border/40 bg-card/30 text-sm text-muted-foreground/60">
-      Carregando editor…
-    </div>
-  ),
-});
 
 interface Props {
   gameId: string;
@@ -70,20 +59,6 @@ const VARIABLES = [
   },
 ];
 
-const TOOLBAR_COMMANDS = [
-  commands.bold,
-  commands.italic,
-  commands.divider,
-  commands.title2,
-  commands.title3,
-  commands.divider,
-  commands.unorderedListCommand,
-  commands.orderedListCommand,
-  commands.divider,
-  commands.link,
-  commands.quote,
-];
-
 export default function PromptEditor({
   gameId,
   promptId,
@@ -107,46 +82,22 @@ export default function PromptEditor({
   const [saveError, setSaveError] = useState("");
   const [activateError, setActivateError] = useState("");
 
-  // Rastreia última posição do cursor enquanto a textarea está focada
-  const lastCursorRef = useRef<{ start: number; end: number } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const handler = () => {
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLTextAreaElement &&
-        active.classList.contains("w-md-editor-text-input")
-      ) {
-        lastCursorRef.current = {
-          start: active.selectionStart ?? 0,
-          end: active.selectionEnd ?? 0,
-        };
-      }
-    };
-    document.addEventListener("selectionchange", handler);
-    return () => document.removeEventListener("selectionchange", handler);
-  }, []);
-
-  // Functional updater evita stale closure; deps vazias
   const insertVariable = useCallback((varKey: string) => {
     const tag = `{{${varKey}}}`;
-    const pos = lastCursorRef.current;
-    setContent((prev) => {
-      if (!pos) return prev + tag;
-      return prev.slice(0, pos.start) + tag + prev.slice(pos.end);
-    });
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const newContent = content.slice(0, start) + tag + content.slice(end);
+    setContent(newContent);
     requestAnimationFrame(() => {
-      const ta = document.querySelector<HTMLTextAreaElement>(
-        ".w-md-editor-text-input",
-      );
-      if (ta && pos) {
-        const newPos = pos.start + tag.length;
-        ta.focus();
-        ta.setSelectionRange(newPos, newPos);
-        lastCursorRef.current = { start: newPos, end: newPos };
-      }
+      ta.focus();
+      const newPos = start + tag.length;
+      ta.setSelectionRange(newPos, newPos);
     });
-  }, []);
+  }, [content]);
 
   const handleSave = useCallback(async () => {
     setSaveError("");
@@ -200,7 +151,6 @@ export default function PromptEditor({
     }
   }, [promptId, router]);
 
-  // Preview com variáveis substituídas por exemplos
   const previewContent = VARIABLES.reduce((acc, v) => {
     return acc.replaceAll(`{{${v.key}}}`, v.example);
   }, content);
@@ -238,18 +188,17 @@ export default function PromptEditor({
       {/* ── Layout 2 colunas ────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[60%_1fr]">
         {/* ── Coluna esquerda: editor ─ */}
-        <div className="flex flex-col gap-2" data-color-mode="dark">
+        <div className="flex flex-col gap-2">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
             Editor de prompt
           </p>
-          <MDEditor
+          <textarea
+            ref={textareaRef}
             value={content}
-            onChange={(v) => setContent(v ?? "")}
-            preview="edit"
-            height={520}
-            className="!border-border/40"
-            commands={TOOLBAR_COMMANDS}
-            extraCommands={[]}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Cole ou escreva o system prompt aqui. Use {{game_name}}, {{archetypes_context}} etc onde quiser que o sistema injete os valores em runtime."
+            className="h-[520px] w-full resize-none rounded-lg border border-border/40 bg-card/30 p-4 font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            spellCheck={false}
           />
         </div>
 
@@ -273,8 +222,8 @@ export default function PromptEditor({
             {varOpen && (
               <div className="border-t border-border/30 px-4 pb-4 pt-3 space-y-2">
                 <p className="text-xs text-muted-foreground/60 leading-snug">
-                  Clique em <strong>inserir</strong> para colocar o campo na posição do cursor no editor.
-                  O sistema preenche automaticamente antes de enviar ao coach.
+                  Posicione o cursor no editor, depois clique <strong>inserir</strong>. A variável aparece
+                  exatamente onde estava o cursor. O sistema substitui pelo valor real antes de enviar ao coach.
                 </p>
                 <div className="space-y-1.5 mt-3">
                   {VARIABLES.map((v) => (

@@ -14,7 +14,6 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-slot": "^1.2.0",
-    "@uiw/react-md-editor": "^4.1.0",
     "@workspace/db": "workspace:*",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",

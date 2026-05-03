@@ -1,0 +1,87 @@
+Substitui o componente @uiw/react-md-editor inteiro por uma <textarea> HTML
+nativa em artifacts/decksensei/app/admin/prompts/_components/PromptEditor.tsx.
+A biblioteca está com bug interno na captura de seleção do cursor (a v4.1.0
+mudou estrutura de DOM e o fix anterior com selectionchange listener não
+funciona). Em vez de tentar mais workarounds, troca pela primitive nativa.
+
+Mudanças:
+
+1. Remove imports relacionados ao MDEditor:
+   - Apaga: import dynamic from "next/dynamic";
+   - Apaga: import { commands } from "@uiw/react-md-editor";
+   - Apaga: const MDEditor = dynamic(...) inteiro
+   - Apaga: const TOOLBAR_COMMANDS = [...]
+
+2. Remove o package @uiw/react-md-editor do package.json. Roda pnpm remove
+   @uiw/react-md-editor depois.
+
+3. Adiciona uma ref direta pra textarea logo depois de lastCursorRef:
+
+   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+4. Simplifica drasticamente o useEffect que captura posição do cursor — agora
+   captura via onSelect direto na textarea, não precisa de event delegation
+   no document. APAGA o useEffect inteiro que existe hoje.
+
+5. Reescreve insertVariable pra ser trivial (textarea nativa expõe
+   selectionStart/selectionEnd diretamente):
+
+   const insertVariable = useCallback((varKey: string) => {
+     const tag = `{{${varKey}}}`;
+     const ta = textareaRef.current;
+     if (!ta) return;
+     const start = ta.selectionStart;
+     const end = ta.selectionEnd;
+     const newContent = content.slice(0, start) + tag + content.slice(end);
+     setContent(newContent);
+     // Reposiciona cursor após o tag inserido
+     requestAnimationFrame(() => {
+       ta.focus();
+       const newPos = start + tag.length;
+       ta.setSelectionRange(newPos, newPos);
+     });
+   }, [content]);
+
+   Note: deps tem [content] agora porque a função usa o content atual via
+   ta.selectionStart, mas o setContent precisa do content sincronizado.
+
+6. Substitui o <MDEditor ... /> por <textarea>:
+
+   <textarea
+     ref={textareaRef}
+     value={content}
+     onChange={(e) => setContent(e.target.value)}
+     placeholder="Cole ou escreva o system prompt aqui. Use {{game_name}}, {{archetypes_context}} etc onde quiser que o sistema injete os valores em runtime."
+     className="h-[520px] w-full resize-none rounded-lg border border-border/40 bg-card/30 p-4 font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+     spellCheck={false}
+   />
+
+   Atributos importantes: font-mono pra alinhar markdown, resize-none pra
+   manter layout estável, leading-relaxed pra legibilidade, spellCheck false
+   pra não marcar markdown syntax como erro.
+
+7. Atualiza o texto do painel "Campos disponíveis" pra refletir que agora é
+   inserção real em qualquer posição:
+
+   "Posicione o cursor no editor, depois clique inserir. A variável aparece
+   exatamente onde estava o cursor. O sistema substitui pelo valor real
+   antes de enviar ao coach."
+
+8. Remove o onMouseDown={(e) => e.preventDefault()} do botão inserir — não é
+   mais necessário porque a textarea nativa não tem comportamento estranho
+   de blur. Mas pode manter por segurança, não atrapalha.
+
+9. Mantém o preview ReactMarkdown à direita exatamente como está — o
+   previewContent (com replaceAll das variáveis) já funciona bem.
+
+10. Mantém TestModal e o resto do componente intactos.
+
+11. Roda pnpm typecheck. Roda pnpm dev. Abre /admin/prompts/[id]/edit, clica
+    no meio do prompt pra posicionar cursor, clica "inserir" em qualquer
+    variável. A variável deve aparecer EXATAMENTE onde o cursor estava.
+
+12. Remove @uiw/react-md-editor das dependências:
+    pnpm --filter @workspace/decksensei remove @uiw/react-md-editor
+
+Confirma o tamanho do bundle reduzido e que /admin/prompts ainda renderiza
+sem importar a lib antiga.
