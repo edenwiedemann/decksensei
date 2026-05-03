@@ -27,6 +27,7 @@ async function getAnalysis(id: string, gameId: string) {
       analysisText: analysesTable.analysisText,
       gameId: analysesTable.gameId,
       deckName: analysesTable.deckName,
+      similarArchetypeId: analysesTable.similarArchetypeId,
       createdAt: analysesTable.createdAt,
       gameName: gamesTable.name,
     })
@@ -59,9 +60,12 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   }
 
   const description = plainText(analysis.analysisText);
+  const fallbackTitle = analysis.similarArchetypeId
+    ? `${analysis.similarArchetypeId} — Análise ${analysis.gameName} · Deck Sensei`
+    : `Análise de deck ${analysis.gameName} — Deck Sensei`;
   const title = analysis.deckName
     ? `${analysis.deckName} — Análise ${analysis.gameName} · Deck Sensei`
-    : `Análise de deck ${analysis.gameName} — Deck Sensei`;
+    : fallbackTitle;
   const url = `https://decksensei.com.br/${game}/a/${id}`;
 
   return {
@@ -134,11 +138,11 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
       <main className="mx-auto max-w-2xl px-6 py-12 pb-28">
         {/* Título do deck + badge read-only */}
         <div className="mb-6 flex flex-col gap-2">
-          {analysis.deckName && (
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {analysis.deckName}
-            </h1>
-          )}
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {analysis.deckName
+              ?? analysis.similarArchetypeId
+              ?? `Análise de ${analysis.gameName}`}
+          </h1>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
               Análise compartilhada · somente leitura

@@ -465,21 +465,6 @@ export default function DeckInput({
         </div>
       )}
 
-      {/* Nome do deck (opcional) */}
-      {(phase === "idle" || phase === "error") && (
-        <div className="flex flex-col gap-1">
-          <input
-            type="text"
-            value={deckName}
-            onChange={(e) => setDeckName(e.target.value)}
-            maxLength={60}
-            placeholder="Nome do deck (opcional) — ex: Agumon OTK, Blue Hybrid…"
-            className="w-full rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-            aria-label="Nome do deck"
-          />
-        </div>
-      )}
-
       {/* Textarea */}
       <Textarea
         value={deck}
@@ -496,6 +481,19 @@ export default function DeckInput({
         aria-label="Decklist"
         readOnly={isAnalyzing}
       />
+
+      {/* Nome do deck (opcional) — entre o textarea e os controles */}
+      {(phase === "idle" || phase === "error") && (
+        <input
+          type="text"
+          value={deckName}
+          onChange={(e) => setDeckName(e.target.value)}
+          maxLength={60}
+          placeholder="Nome do deck (opcional) — ex: Agumon OTK, Blue Hybrid…"
+          className="w-full rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
+          aria-label="Nome do deck"
+        />
+      )}
 
       {/* Deck parse preview */}
       {parsed !== null && (phase === "idle" || phase === "error") && (

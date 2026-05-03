@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
     tournamentMode = body.tournamentMode === true;
     deckName =
       typeof body.deckName === "string" && body.deckName.trim()
-        ? body.deckName.trim().slice(0, 80)
+        ? body.deckName.trim().slice(0, 60)
         : null;
   } catch {
     return Response.json({ error: "Body inválido" }, { status: 400 });
