@@ -10,6 +10,7 @@ import {
   isNull,
   desc,
 } from "@workspace/db";
+import { computeDeckGrade } from "@/lib/deck-score";
 
 interface PageParams {
   params: Promise<{ game: string }>;
@@ -25,13 +26,6 @@ function excerpt(md: string, maxLen = 120): string {
     .replace(/\n/g, " ")
     .trim()
     .slice(0, maxLen);
-}
-
-function computeGradeFromText(text: string): "A" | "B" | "C" | "D" | null {
-  const m = text.match(/similaridade aproximada\s*\*\*(\d+)%/);
-  if (!m) return null;
-  const pct = parseInt(m[1], 10);
-  return pct >= 80 ? "A" : pct >= 65 ? "B" : pct >= 50 ? "C" : "D";
 }
 
 const GRADE_COLORS = {
@@ -133,7 +127,7 @@ export default async function HistoricoPage({ params }: PageParams) {
                 month: "short",
                 year: "numeric",
               });
-              const grade = computeGradeFromText(a.analysisText);
+              const grade = computeDeckGrade(a.analysisText)?.grade ?? null;
               return (
                 <a
                   key={a.id}

@@ -2,6 +2,7 @@ import { db, analysesTable, gamesTable, isNull, eq, and } from "@workspace/db";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import AnalysisResult from "../../_components/AnalysisResult";
+import { computeDeckGrade } from "@/lib/deck-score";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,12 +61,15 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   }
 
   const description = plainText(analysis.analysisText);
-  const fallbackTitle = analysis.similarArchetypeId
-    ? `${analysis.similarArchetypeId} — Análise ${analysis.gameName} · Deck Sensei`
-    : `Análise de deck ${analysis.gameName} — Deck Sensei`;
+  const grade = computeDeckGrade(analysis.analysisText);
+  const fallbackLabel = analysis.similarArchetypeId
+    ? `${analysis.similarArchetypeId}${grade ? ` (${grade.grade})` : ""}`
+    : grade
+      ? `Deck ${grade.grade} — ${analysis.gameName}`
+      : `Análise de deck ${analysis.gameName}`;
   const title = analysis.deckName
     ? `${analysis.deckName} — Análise ${analysis.gameName} · Deck Sensei`
-    : fallbackTitle;
+    : `${fallbackLabel} · Deck Sensei`;
   const url = `https://decksensei.com.br/${game}/a/${id}`;
 
   return {
@@ -95,6 +99,8 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
   const analysis = await getAnalysis(id, game);
 
   if (!analysis) notFound();
+
+  const grade = computeDeckGrade(analysis.analysisText);
 
   const date = analysis.createdAt.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -140,8 +146,10 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
         <div className="mb-6 flex flex-col gap-2">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {analysis.deckName
-              ?? analysis.similarArchetypeId
-              ?? `Análise de ${analysis.gameName}`}
+              ? `${analysis.deckName} — Análise`
+              : analysis.similarArchetypeId
+                ? `${analysis.similarArchetypeId}${grade ? ` — Deck ${grade.grade}` : ""}`
+                : `Análise de ${analysis.gameName}`}
           </h1>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
