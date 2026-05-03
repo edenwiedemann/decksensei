@@ -5,6 +5,7 @@ import { requireAdminCookie } from "@/lib/auth/admin";
 import type { MetaArchetype } from "@/lib/analysis-prompt";
 import SnapshotActions from "./_components/SnapshotActions";
 import ArchetypeCardsList from "./_components/ArchetypeCardsList";
+import ActiveSnapshotBanner from "./_components/ActiveSnapshotBanner";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -80,9 +81,19 @@ export default async function SnapshotDetailPage({
           {snap.notes && <><span>·</span><span className="max-w-xs truncate">{snap.notes}</span></>}
         </div>
 
+        {/* Banner de só leitura para snapshot ativa */}
+        {snap.active && (
+          <ActiveSnapshotBanner
+            snapshotId={snap.id}
+            currentVersion={snap.version}
+            gameId={snap.game_id}
+          />
+        )}
+
         <ArchetypeCardsList
           snapshotId={snap.id}
           archetypes={archetypes}
+          isActive={snap.active}
         />
       </main>
     </div>

@@ -28,14 +28,15 @@ const COLOR_DOTS: Record<string, string> = {
 interface Props {
   snapshotId: number;
   archetypes: MetaArchetype[]; // original DB order — must NOT be pre-sorted
+  isActive?: boolean;
 }
 
-export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: Props) {
+export default function ArchetypeCardsList({ snapshotId, archetypes: initial, isActive = false }: Props) {
   const router = useRouter();
-  const [archetypes, setArchetypes]     = useState(initial);
-  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [archetypes, setArchetypes]       = useState(initial);
+  const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
-  const [addingNew, setAddingNew]       = useState(false);
+  const [addingNew, setAddingNew]         = useState(false);
 
   // Sorted copy for display only — original array keeps DB indices
   const displayed = [...archetypes].sort(
@@ -103,22 +104,30 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
           {archetypes.length} {archetypes.length === 1 ? "arquetipo" : "arquetipos"}
         </p>
-        <button
-          onClick={handleAddNew}
-          disabled={addingNew}
-          className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all hover:border-primary/70 hover:bg-primary/20 disabled:opacity-50"
-        >
-          {addingNew ? "Criando…" : "+ Adicionar arquetipo"}
-        </button>
+        {!isActive && (
+          <button
+            onClick={handleAddNew}
+            disabled={addingNew}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all hover:border-primary/70 hover:bg-primary/20 disabled:opacity-50"
+          >
+            {addingNew ? "Criando…" : "+ Adicionar arquetipo"}
+          </button>
+        )}
       </div>
 
       {archetypes.length === 0 && (
         <div className="rounded-xl border border-border/40 bg-card/40 px-8 py-12 text-center">
           <p className="text-sm text-muted-foreground">
-            Nenhum arquetipo ainda.{" "}
-            <button onClick={handleAddNew} className="text-primary hover:underline">
-              Adicionar primeiro →
-            </button>
+            {isActive ? (
+              "Nenhum arquetipo nesta snapshot."
+            ) : (
+              <>
+                Nenhum arquetipo ainda.{" "}
+                <button onClick={handleAddNew} className="text-primary hover:underline">
+                  Adicionar primeiro →
+                </button>
+              </>
+            )}
           </p>
         </div>
       )}
@@ -190,31 +199,33 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial }: 
                 <p className="text-xs text-muted-foreground/60 line-clamp-1">{arch.play_style_pt}</p>
               )}
 
-              {/* Actions */}
-              <div className="mt-auto flex items-center gap-2 pt-1">
-                <Link
-                  href={`/admin/meta/${snapshotId}/archetype/${realIdx}/edit`}
-                  className="flex-1 rounded-md border border-border/40 py-1.5 text-center text-xs text-muted-foreground transition-all hover:border-border/70 hover:text-foreground"
-                >
-                  Editar
-                </Link>
-                <button
-                  onClick={() => handleDuplicate(arch)}
-                  disabled={duplicatingId === arch.id}
-                  title="Duplicar arquetipo"
-                  className="rounded-md border border-border/40 px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-all hover:border-border/70 hover:text-foreground disabled:opacity-40"
-                >
-                  {duplicatingId === arch.id ? "…" : "⧉"}
-                </button>
-                <button
-                  onClick={() => handleDelete(arch)}
-                  disabled={deletingId === arch.id}
-                  title="Excluir arquetipo"
-                  className="rounded-md border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400/60 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-40"
-                >
-                  {deletingId === arch.id ? "…" : "✕"}
-                </button>
-              </div>
+              {/* Actions — hidden entirely when snapshot is active */}
+              {!isActive && (
+                <div className="mt-auto flex items-center gap-2 pt-1">
+                  <Link
+                    href={`/admin/meta/${snapshotId}/archetype/${realIdx}/edit`}
+                    className="flex-1 rounded-md border border-border/40 py-1.5 text-center text-xs text-muted-foreground transition-all hover:border-border/70 hover:text-foreground"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={() => handleDuplicate(arch)}
+                    disabled={duplicatingId === arch.id}
+                    title="Duplicar arquetipo"
+                    className="rounded-md border border-border/40 px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-all hover:border-border/70 hover:text-foreground disabled:opacity-40"
+                  >
+                    {duplicatingId === arch.id ? "…" : "⧉"}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(arch)}
+                    disabled={deletingId === arch.id}
+                    title="Excluir arquetipo"
+                    className="rounded-md border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400/60 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-40"
+                  >
+                    {deletingId === arch.id ? "…" : "✕"}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

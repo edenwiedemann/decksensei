@@ -22,19 +22,26 @@ export async function POST(
   let body: Record<string, unknown> = {};
   try { body = (await req.json()) as typeof body; } catch { /* blank */ }
 
-  const newArch = toDbArchetype({
-    ...BLANK_ARCHETYPE,
-    id: `arch-${Date.now()}`,
-    ...(body as object),
-  });
-
-  const r = await pool.query<{ json_content: unknown }>(
-    "SELECT json_content FROM meta_snapshots WHERE id = $1 LIMIT 1",
+  const r = await pool.query<{ json_content: unknown; active: boolean }>(
+    "SELECT json_content, active FROM meta_snapshots WHERE id = $1 LIMIT 1",
     [numericId],
   );
   if (!r.rows[0]) {
     return Response.json({ error: "Snapshot não encontrada." }, { status: 404 });
   }
+
+  if (r.rows[0].active) {
+    return Response.json({
+      error: "Esta é a snapshot ATIVA. Edição direta não é permitida pra evitar inconsistência. Use 'Duplicar' pra criar v2 inativa, edite ela, e ative quando estiver pronto.",
+      requireDuplicate: true,
+    }, { status: 409 });
+  }
+
+  const newArch = toDbArchetype({
+    ...BLANK_ARCHETYPE,
+    id: `arch-${Date.now()}`,
+    ...(body as object),
+  });
 
   const content = r.rows[0].json_content as { archetypes?: unknown[] };
   const archetypes = content.archetypes ?? [];

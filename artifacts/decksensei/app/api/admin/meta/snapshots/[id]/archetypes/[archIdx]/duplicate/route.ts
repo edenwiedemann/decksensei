@@ -17,12 +17,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     return Response.json({ error: "ID ou índice inválido." }, { status: 400 });
   }
 
-  const r = await pool.query<{ json_content: unknown }>(
-    "SELECT json_content FROM meta_snapshots WHERE id = $1 LIMIT 1",
+  const r = await pool.query<{ json_content: unknown; active: boolean }>(
+    "SELECT json_content, active FROM meta_snapshots WHERE id = $1 LIMIT 1",
     [numericId],
   );
   if (!r.rows[0]) {
     return Response.json({ error: "Snapshot não encontrada." }, { status: 404 });
+  }
+
+  if (r.rows[0].active) {
+    return Response.json({
+      error: "Esta é a snapshot ATIVA. Edição direta não é permitida pra evitar inconsistência. Use 'Duplicar' pra criar v2 inativa, edite ela, e ative quando estiver pronto.",
+      requireDuplicate: true,
+    }, { status: 409 });
   }
 
   const content = r.rows[0].json_content as { archetypes?: Record<string, unknown>[] };
