@@ -223,6 +223,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── 2c. Cobertura de enriquecimento ──────────────────────────────────
+  const allDeckCards = [
+    ...deck.mainDeck,
+    ...Object.values(deck.auxDecks).flat(),
+  ];
+  const uniqueCodes = new Set(allDeckCards.map((c) => c.cardCode));
+  const enrichedWithData = new Set(
+    enrichedCards.filter((c) => c.data !== null).map((c) => c.cardCode),
+  );
+  const totalUnique = uniqueCodes.size;
+  const enrichmentPct =
+    totalUnique > 0
+      ? Math.round((enrichedWithData.size / totalUnique) * 100)
+      : 100;
+  const lowCoverage = enrichmentPct < 50;
+
   // ── 3. Monta o prompt ─────────────────────────────────────────────────
   let built: Awaited<ReturnType<typeof buildAnalysisPrompt>>;
 
@@ -239,7 +255,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 3b. Mapa de cores dos arquetipos para o frontend ──────────────────
+  // ── 3b. Injeta aviso de baixa cobertura no user message ──────────────
+  if (lowCoverage && built.messages.length > 0) {
+    const missingPct = 100 - enrichmentPct;
+    const warning =
+      `AVISO: ~${missingPct}% das cartas deste deck não puderam ser carregadas da API externa. ` +
+      `Sua análise pode ser menos precisa. Tente novamente em alguns minutos.\n\n`;
+    const firstMsg = built.messages[0];
+    if (firstMsg) {
+      built.messages[0] = { ...firstMsg, content: warning + firstMsg.content };
+    }
+  }
+
+  // ── 3c. Mapa de cores dos arquetipos para o frontend ──────────────────
   const colorMap: Record<string, string> = {};
   for (const arch of built.archetypes) {
     if (arch.colors[0]) colorMap[arch.name_pt] = arch.colors[0];
@@ -345,6 +373,7 @@ export async function POST(request: NextRequest) {
     "Cache-Control": "no-cache, no-store",
     "X-Analysis-Id": analysisId,
     "X-Meta-Color-Map": colorMapHeader,
+    "X-Enrichment-Coverage": String(enrichmentPct),
   });
 
   if (shouldSetCountCookie) {

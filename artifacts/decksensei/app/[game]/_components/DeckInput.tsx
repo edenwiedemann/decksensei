@@ -57,6 +57,11 @@ interface AnalysisState {
   /** ID da análise salva no DB (nanoid 24), vindo do header X-Analysis-Id. */
   analysisId: string;
   /**
+   * Percentual de cartas enriquecidas com sucesso (0–100).
+   * null = ainda não recebido (antes da resposta do servidor).
+   */
+  enrichmentPct: number | null;
+  /**
    * Quando > 0: resposta 429 — número de segundos até a janela de rate limit
    * expirar. O componente exibe countdown e bloqueia novo envio.
    */
@@ -70,6 +75,7 @@ const IDLE: AnalysisState = {
   validationErrors: [],
   colorMap: {},
   analysisId: "",
+  enrichmentPct: null,
   retryAfterSec: 0,
 };
 
@@ -323,6 +329,9 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         // header ausente ou malformado — análise continua sem cores de arquetipo
       }
       const analysisId = res.headers.get("X-Analysis-Id") ?? "";
+      const enrichmentPctRaw = res.headers.get("X-Enrichment-Coverage");
+      const enrichmentPct =
+        enrichmentPctRaw !== null ? parseInt(enrichmentPctRaw, 10) : null;
 
       // ── Leitura do stream ─────────────────────────────────────────────
       const reader = res.body.getReader();
@@ -337,10 +346,10 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           return;
         }
         fullText += decoder.decode(value, { stream: true });
-        setAnalysis({ ...IDLE, phase: "streaming", text: fullText, colorMap, analysisId });
+        setAnalysis({ ...IDLE, phase: "streaming", text: fullText, colorMap, analysisId, enrichmentPct });
       }
 
-      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId });
+      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct });
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       console.error("[analyze]", err);
@@ -527,6 +536,21 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
             )}
           </div>
         </>
+      )}
+
+      {/* Banner de cobertura de enriquecimento */}
+      {showStream && analysis.enrichmentPct !== null && analysis.enrichmentPct < 100 && (
+        <div
+          className={
+            analysis.enrichmentPct < 50
+              ? "rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300/90"
+              : "rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+          }
+        >
+          Análise gerada com{" "}
+          <span className="font-semibold tabular-nums">{analysis.enrichmentPct}%</span>{" "}
+          de cobertura de cartas.
+        </div>
       )}
 
       {/* Divider + análise em stream */}
