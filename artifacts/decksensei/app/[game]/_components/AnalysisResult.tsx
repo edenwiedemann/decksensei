@@ -411,6 +411,40 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
   );
 }
 
+// ─── Detecção de formato esperado ────────────────────────────────────────────
+
+const EXPECTED_HEADERS = [
+  "## Visão geral",
+  "## Plano de jogo",
+  "## Pontos fortes",
+  "## Vulnerabilidades",
+  "## Comparação com o meta",
+  "## Sugestões de troca",
+];
+
+// ─── FallbackProse ────────────────────────────────────────────────────────────
+
+interface FallbackProseProps {
+  text: string;
+  analysisId?: string;
+}
+
+function FallbackProse({ text, analysisId }: FallbackProseProps) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs text-muted-foreground/60">
+        Formato inesperado da análise. Reportamos pro time.
+      </div>
+      <div className="rounded-xl border border-border/50 bg-card px-5 py-5">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+          {text}
+        </ReactMarkdown>
+      </div>
+      {analysisId && <FeedbackBlock analysisId={analysisId} />}
+    </div>
+  );
+}
+
 // ─── AnalysisResult ───────────────────────────────────────────────────────────
 
 interface AnalysisResultProps {
@@ -421,6 +455,19 @@ interface AnalysisResultProps {
 }
 
 export default function AnalysisResult({ text, streaming, colorMap, analysisId }: AnalysisResultProps) {
+  // Só verifica o formato depois que o stream terminou — durante o stream o
+  // texto é parcial e os headers chegam progressivamente.
+  if (!streaming) {
+    const missing = EXPECTED_HEADERS.filter((h) => !text.includes(h));
+    if (missing.length > 0) {
+      console.warn(
+        "[AnalysisResult] Formato inesperado — headers ausentes. Considerar prompt mais estrito.",
+        { missing },
+      );
+      return <FallbackProse text={text} analysisId={analysisId} />;
+    }
+  }
+
   const sections = parseSections(text);
   if (sections.length === 0) return null;
 
