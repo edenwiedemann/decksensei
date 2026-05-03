@@ -128,9 +128,9 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
 
   const parsed = useMemo(() => {
     if (!deck.trim()) return null;
-    const parser = getParser(gameConfig.id);
+    const parser = getParser(gameConfig.parser);
     return parser.parse(deck);
-  }, [deck, gameConfig.id]);
+  }, [deck, gameConfig.parser]);
 
   const { main_deck_size, egg_deck_max } = gameConfig.deck_rules;
   const hasEggDeck = egg_deck_max > 0;
@@ -188,8 +188,8 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
     abortRef.current = abort;
 
     // ── Layer 3: Validação do deck (sem chamar a API) ─────────────────────
-    const validator = getValidator(gameConfig.id);
-    const validation = validator.validate(parsed, gameConfig.deck_rules);
+    const validator = getValidator(gameConfig.validator);
+    const validation = validator.validate(parsed);
 
     if (!validation.valid) {
       setAnalysis({
@@ -216,7 +216,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         return true;
       });
 
-      const cardApi = getCardAPI(gameConfig.id);
+      const cardApi = getCardAPI(gameConfig.card_api);
       const enrichedMap = new Map<
         string,
         Awaited<ReturnType<typeof cardApi.fetchCard>>

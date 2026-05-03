@@ -18,6 +18,44 @@
       "endpoint": "https://digimoncard.io/api-public/search",
       "rate_limit": "15 req per 10s",
       "license_notes_pt": "API pública da digimoncard.io — usar apenas com cache em runtime, não copiar dados pra DB própria."
+    },
+    "parser": {
+      "line_patterns": [
+        "^\\s*(\\d+)\\s*x?\\s+([A-Za-z]{1,4}\\d*-\\d+)(?:\\s+(.+?))?\\s*$",
+        "^\\s*(\\d+)x([A-Za-z]{1,4}\\d*-\\d+)(?:\\s+(.+?))?\\s*$"
+      ],
+      "groups": { "quantity": 1, "code": 2, "name": 3 },
+      "section_markers": {
+        "egg": ["egg deck", "digi-egg deck", "ovos", "egg"]
+      },
+      "comment_prefixes": ["#", "//"]
+    },
+    "card_api": {
+      "url_template": "https://digimoncard.io/api-public/search?card={code}",
+      "search_url_template": "https://digimoncard.io/api-public/search?name={query}",
+      "response_path": "$[0]",
+      "field_mapping": {
+        "code": "id",
+        "name": "name",
+        "color": "color",
+        "type": "type",
+        "level": "level",
+        "playCost": "play_cost",
+        "dp": "dp",
+        "attribute": "attribute",
+        "mainEffect": "main_effect",
+        "inheritedEffect": "source_effect",
+        "imageUrl": "pretty_url"
+      },
+      "image_url_template": "https://digimoncard.io/images/cards/{imageUrl}.jpg",
+      "rate_limit": { "max": 15, "window_sec": 10 },
+      "headers": { "Accept": "application/json" },
+      "timeout_ms": 8000
+    },
+    "validator": {
+      "main_deck_size": { "min": 50, "max": 50 },
+      "aux_decks": { "egg": { "min": 0, "max": 5 } },
+      "max_copies_per_card": 4
     }
   },
   "format": "BT21 Standard (EN)",

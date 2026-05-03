@@ -1,6 +1,7 @@
 /**
  * Interfaces TCG-agnósticas para adapters específicos de cada jogo.
- * Cada jogo implementa estas interfaces em lib/games/<jogo>/.
+ * Os adapters genéricos em lib/games/generic/ implementam estas interfaces,
+ * lendo suas configurações de games.config no banco.
  */
 
 // ─── Card primitives ─────────────────────────────────────────────────────────
@@ -69,8 +70,8 @@ export interface DeckParser {
 // ─── Validator ───────────────────────────────────────────────────────────────
 
 /**
- * Regras estruturais de um deck, lidas de games.config.deck_rules.
- * Nunca hardcodadas no código — vêm sempre do banco.
+ * Regras estruturais de um deck legado, usadas para display na UI.
+ * Para validação, use GenericDeckValidator com ValidatorConfig.
  */
 export interface DeckRules {
   main_deck_size: number;
@@ -91,10 +92,9 @@ export interface DeckValidator {
   /**
    * Valida deck contra regras do jogo.
    * Aceita tanto ParsedDeck como EnrichedDeck (estruturalmente compatível).
-   * Quando passado EnrichedDeck, avisos adicionais baseados em dados de carta
-   * (ex.: diversidade de cores) também são gerados.
+   * Regras vêm do ValidatorConfig passado no construtor — não há parâmetro de regras.
    */
-  validate(deck: ParsedDeck, rules: DeckRules): ValidationResult;
+  validate(deck: ParsedDeck): ValidationResult;
 }
 
 // ─── Card API ─────────────────────────────────────────────────────────────────

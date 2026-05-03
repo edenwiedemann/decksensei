@@ -71,12 +71,13 @@ export default async function AdminDashboardPage({
         : "bg-primary";
 
   const NAV_LINKS = [
-    { href: `/admin/analyses`,              label: "Análises",    desc: "Histórico e moderação de análises",   icon: "🗂" },
-    { href: `/admin/users`,                 label: "Usuários",    desc: "Cadastros, magic links e sessões",    icon: "👤" },
-    { href: `/admin/feedback`,              label: "Feedback",    desc: "Avaliações up/down das análises",     icon: "⭐" },
-    { href: `/admin/prompts?game=${currentGame}`,    label: "Prompts",     desc: "Versões de prompt por jogo",          icon: "✏️" },
-    { href: `/admin/meta?game=${currentGame}`,       label: "Meta global", desc: "Snapshots e arquetipos do meta",      icon: "🌐" },
-    { href: `/admin/meta-recife?game=${currentGame}`,label: "Meta Recife", desc: "Ajustes locais do meta de Recife",    icon: "🦀" },
+    { href: `/admin/games`,                           label: "Jogos",       desc: "Cadastrar e editar jogos suportados",  icon: "🎮" },
+    { href: `/admin/analyses`,                        label: "Análises",    desc: "Histórico e moderação de análises",    icon: "🗂" },
+    { href: `/admin/users`,                           label: "Usuários",    desc: "Cadastros, magic links e sessões",     icon: "👤" },
+    { href: `/admin/feedback`,                        label: "Feedback",    desc: "Avaliações up/down das análises",      icon: "⭐" },
+    { href: `/admin/prompts?game=${currentGame}`,     label: "Prompts",     desc: "Versões de prompt por jogo",           icon: "✏️" },
+    { href: `/admin/meta?game=${currentGame}`,        label: "Meta global", desc: "Snapshots e arquetipos do meta",       icon: "🌐" },
+    { href: `/admin/meta-recife?game=${currentGame}`, label: "Meta Recife", desc: "Ajustes locais do meta de Recife",     icon: "🦀" },
   ];
 
   return (

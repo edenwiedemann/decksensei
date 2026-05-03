@@ -28,6 +28,9 @@ artifacts/decksensei/
       login/page.tsx
       analyses/page.tsx
       feedback/page.tsx
+      games/page.tsx           ← lista jogos com stats
+      games/new/page.tsx       ← formulário de novo jogo
+      games/[id]/edit/page.tsx ← edição de jogo existente
       meta/[id]/page.tsx
       prompts/page.tsx
       users/page.tsx
@@ -40,8 +43,11 @@ artifacts/decksensei/
       admin/
         login/route.ts      ← POST /api/admin/login (excluída do middleware)
         analyses/recent/route.ts
-        card-search/route.ts
+        card-search/route.ts  ← GET ?game=&q= — usa config do DB (genérico)
         featured/set/route.ts
+        games/route.ts        ← POST criar jogo
+        games/[id]/route.ts   ← PUT atualizar, DELETE remover jogo
+        games/test/route.ts   ← POST testar config (parser + card_api + validator)
         meta/snapshots/     ← CRUD de snapshots e arquétipos
         prompts/            ← CRUD de prompts
         users/export/route.ts
@@ -51,9 +57,15 @@ artifacts/decksensei/
     env.ts                  ← validação de env vars no boot
     auth/admin.ts           ← requireAdmin, requireAdminCookie, adminSessionValue
     games/
-      types.ts              ← interfaces TCG-agnósticas
-      digimon/              ← adapters do Digimon
-    game-config.ts
+      types.ts              ← interfaces TCG-agnósticas (DeckParser, CardAPI, DeckValidator, etc.)
+      index.ts              ← getParser(cfg), getCardAPI(cfg), getValidator(cfg) — dispatch por config
+      generic/
+        rate-limiter.ts     ← SerialRateLimiter (configurable max/window)
+        parser.ts           ← GenericDeckParser (lê line_patterns, section_markers do config)
+        card-api.ts         ← GenericCardAPI (lê url_template, field_mapping do config)
+        validator.ts        ← GenericDeckValidator (lê main_deck_size, aux_decks do config)
+      list.ts               ← getGames() — lista jogos do DB
+    game-config.ts          ← GameConfig + ParserConfig + CardApiConfig + ValidatorConfig
     analysis-prompt.ts
   middleware.ts             ← protege /admin/* e /api/admin/* (exceto login)
   public/
@@ -127,8 +139,28 @@ pnpm --filter @workspace/db run push             # aplicar schema no banco
 npx tsc --noEmit                                  # type check (zero erros)
 ```
 
+## Arquitetura TCG-agnóstica (refactor completo)
+
+**Princípio:** cadastrar um jogo novo = preencher formulário no `/admin/games/new`. Zero código novo.
+
+`games.config` (JSONB) agora tem três blocos além dos existentes:
+
+```json
+{
+  "parser":    { "line_patterns": [...], "groups": {...}, "section_markers": {...}, "comment_prefixes": [...] },
+  "card_api":  { "url_template": "...", "response_path": "$[0]", "field_mapping": {...}, "rate_limit": {...} },
+  "validator": { "main_deck_size": {"min":50,"max":50}, "aux_decks": {...}, "max_copies_per_card": 4 }
+}
+```
+
+Adapters genéricos em `lib/games/generic/` implementam `DeckParser`, `CardAPI`, `DeckValidator` lendo esses blocos.
+`getParser(config.parser)` / `getCardAPI(config.card_api)` / `getValidator(config.validator)` — sem switch/case, sem hardcode.
+A config chega como prop do server component `[game]/page.tsx` → `DeckInput` (sem acesso a DB no cliente).
+`lib/games/digimon/` foi **deletada** — tudo dirigido por dados.
+
 ## Mudanças recentes
 
+- **Refactor estrutural TCG-agnóstico:** deletada `lib/games/digimon/`, criados adapters genéricos, CRUD `/admin/games`
 - Middleware: `/api/admin/login` excluído da proteção (antes bloqueava login)
 - `app/api/admin/analyses/recent/route.ts`: removido JOIN em `meta_archetypes` (tabela inexistente)
 - `env.ts`: banner de erro renomeado de "TopdeckCoach" para "Deck Sensei"
