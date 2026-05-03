@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
       });
 
       if (res.ok) {
-        router.push("/admin/analyses");
+        router.push("/admin");
         return;
       }
 
