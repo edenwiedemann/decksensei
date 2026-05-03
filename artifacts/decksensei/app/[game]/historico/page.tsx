@@ -46,7 +46,7 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
       ? (gradeParam as DeckGrade)
       : null;
 
-  const [gameRow, rows] = await Promise.all([
+  const [gameRow, rows, gradeCountsRow] = await Promise.all([
     db
       .select({ name: gamesTable.name })
       .from(gamesTable)
@@ -75,7 +75,31 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
       )
       .orderBy(desc(analysesTable.createdAt), desc(analysesTable.id))
       .limit(PAGE_SIZE + 1),
+
+    db
+      .select({
+        countA: sql<number>`COUNT(*) FILTER (WHERE ${analysesTable.analysisText} ~ ${GRADE_REGEX["A"]})`,
+        countB: sql<number>`COUNT(*) FILTER (WHERE ${analysesTable.analysisText} ~ ${GRADE_REGEX["B"]})`,
+        countC: sql<number>`COUNT(*) FILTER (WHERE ${analysesTable.analysisText} ~ ${GRADE_REGEX["C"]})`,
+        countD: sql<number>`COUNT(*) FILTER (WHERE ${analysesTable.analysisText} ~ ${GRADE_REGEX["D"]})`,
+      })
+      .from(analysesTable)
+      .where(
+        and(
+          eq(analysesTable.gameId, game),
+          eq(analysesTable.userId, user.id),
+          isNull(analysesTable.deletedAt),
+        ),
+      )
+      .then((r) => r[0] ?? { countA: 0, countB: 0, countC: 0, countD: 0 }),
   ]);
+
+  const gradeCounts = {
+    A: Number(gradeCountsRow.countA),
+    B: Number(gradeCountsRow.countB),
+    C: Number(gradeCountsRow.countC),
+    D: Number(gradeCountsRow.countD),
+  };
 
   if (!gameRow) notFound();
 
@@ -130,6 +154,7 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
             initialNextCursor={initialNextCursor}
             initialGrade={grade}
             game={game}
+            gradeCounts={gradeCounts}
           />
         </Suspense>
 

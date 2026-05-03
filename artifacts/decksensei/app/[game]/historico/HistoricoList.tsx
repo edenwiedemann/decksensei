@@ -18,6 +18,7 @@ interface Props {
   initialNextCursor: string | null;
   initialGrade: DeckGrade | null;
   game: string;
+  gradeCounts: Record<DeckGrade, number>;
 }
 
 function excerpt(md: string, maxLen = 80): string {
@@ -52,6 +53,7 @@ export default function HistoricoList({
   initialNextCursor,
   initialGrade,
   game,
+  gradeCounts,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -126,8 +128,33 @@ export default function HistoricoList({
   const isSearching = query.trim().length > 0;
   const hasMorePages = nextCursor !== null;
 
+  const totalWithGrade = GRADES.reduce((s, g) => s + gradeCounts[g], 0);
+
   return (
     <>
+      {/* Resumo de notas */}
+      {totalWithGrade > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {GRADES.filter((g) => gradeCounts[g] > 0).map((g, i) => (
+            <span key={g} className="flex items-center gap-2">
+              {i > 0 && (
+                <span className="text-muted-foreground/30 select-none">·</span>
+              )}
+              <button
+                onClick={() => handleGradeChange(g)}
+                disabled={switching}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:opacity-80 ${
+                  activeGrade === g ? CHIP_ACTIVE : GRADE_COLORS[g]
+                }`}
+              >
+                <span className="tabular-nums">{gradeCounts[g]}</span>
+                <span>{g}</span>
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Mensagem de erro inline */}
       {error && (
         <div className="mb-4 rounded-lg border border-rose-400/30 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-400">
