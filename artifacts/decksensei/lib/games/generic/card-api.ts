@@ -94,6 +94,14 @@ export class GenericCardAPI implements CardAPI {
   }
 
   private async _fetchFromApi(cardCode: string): Promise<CardData | null> {
+    const result = await this._tryFetch(cardCode);
+    if (result !== null) return result;
+    // Retry único após 500 ms — cobre instabilidades transitórias da API
+    await new Promise<void>((r) => setTimeout(r, 500));
+    return this._tryFetch(cardCode);
+  }
+
+  private async _tryFetch(cardCode: string): Promise<CardData | null> {
     try {
       const url = this.config.url_template.replace(
         "{code}",

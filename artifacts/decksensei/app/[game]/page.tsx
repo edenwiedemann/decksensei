@@ -122,6 +122,14 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
         <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/25">
           {badgeLabel}
         </span>
+        <nav className="ml-auto">
+          <a
+            href={`/${game}/historico`}
+            className="text-sm text-muted-foreground/50 hover:text-foreground transition-colors"
+          >
+            Histórico
+          </a>
+        </nav>
       </header>
 
       {/* Hero — 60vh */}

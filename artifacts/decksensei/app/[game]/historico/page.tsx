@@ -27,6 +27,20 @@ function excerpt(md: string, maxLen = 120): string {
     .slice(0, maxLen);
 }
 
+function computeGradeFromText(text: string): "A" | "B" | "C" | "D" | null {
+  const m = text.match(/similaridade aproximada\s*\*\*(\d+)%/);
+  if (!m) return null;
+  const pct = parseInt(m[1], 10);
+  return pct >= 80 ? "A" : pct >= 65 ? "B" : pct >= 50 ? "C" : "D";
+}
+
+const GRADE_COLORS = {
+  A: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
+  B: "text-sky-400 bg-sky-400/10 border-sky-400/30",
+  C: "text-amber-400 bg-amber-400/10 border-amber-400/30",
+  D: "text-rose-400 bg-rose-400/10 border-rose-400/30",
+} as const;
+
 export default async function HistoricoPage({ params }: PageParams) {
   const { game } = await params;
   const cookieStore = await cookies();
@@ -118,6 +132,7 @@ export default async function HistoricoPage({ params }: PageParams) {
                 month: "short",
                 year: "numeric",
               });
+              const grade = computeGradeFromText(a.analysisText);
               return (
                 <a
                   key={a.id}
@@ -135,11 +150,18 @@ export default async function HistoricoPage({ params }: PageParams) {
                         {excerpt(a.analysisText)}…
                       </p>
                     </div>
-                    <div className="shrink-0 text-right">
+                    <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
                       <span className="text-xs text-muted-foreground/60">
                         {date}
                       </span>
-                      <div className="mt-1 text-xs text-primary/60 opacity-0 transition-opacity group-hover:opacity-100">
+                      {grade && (
+                        <span
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded border text-sm font-black tabular-nums ${GRADE_COLORS[grade]}`}
+                        >
+                          {grade}
+                        </span>
+                      )}
+                      <div className="text-xs text-primary/60 opacity-0 transition-opacity group-hover:opacity-100">
                         Ver →
                       </div>
                     </div>

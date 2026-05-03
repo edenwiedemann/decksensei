@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Share2, Check, Mail } from "lucide-react";
+import type { DeckGrade } from "@/lib/deck-score";
 import AnalysisResult from "./AnalysisResult";
 import AnalysisErrorBoundary from "./AnalysisErrorBoundary";
 
@@ -18,6 +19,10 @@ interface AnalysisStreamProps {
   elapsedSec?: number | null;
   /** Dias desde o último snapshot de meta ativo. Exibe aviso se > 14. */
   metaSnapshotAgeDays?: number;
+  /** Grade da análise atual (calculado de fullText). */
+  currentGrade?: DeckGrade | null;
+  /** Grade da análise anterior armazenada no localStorage. */
+  previousGrade?: DeckGrade | null;
 }
 
 export default function AnalysisStream({
@@ -30,6 +35,8 @@ export default function AnalysisStream({
   onReset,
   elapsedSec,
   metaSnapshotAgeDays,
+  currentGrade,
+  previousGrade,
 }: AnalysisStreamProps) {
   const hasText = text.length > 0;
   const [copied, setCopied] = useState(false);
@@ -37,10 +44,16 @@ export default function AnalysisStream({
   async function handleShare() {
     const url = `${window.location.origin}/${gameId}/a/${analysisId}`;
     try {
+      // Web Share API: abre menu nativo de compartilhamento no mobile
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: "Análise de deck — Deck Sensei", url });
+        return;
+      }
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
+    } catch (err) {
+      if ((err as { name?: string }).name === "AbortError") return;
       window.prompt("Copie o link:", url);
     }
   }
@@ -55,6 +68,10 @@ export default function AnalysisStream({
       }
     });
   }
+
+  // Calcula se houve melhora ou piora (A < B < C < D, A é melhor)
+  const gradeChanged = currentGrade && previousGrade && currentGrade !== previousGrade;
+  const improved = gradeChanged && currentGrade! < previousGrade!;
 
   return (
     <div className="flex flex-col gap-4">
@@ -165,6 +182,17 @@ export default function AnalysisStream({
           )}
 
           {analysisId && <EmailForm analysisId={analysisId} />}
+
+          {/* Grade diff (era X → agora Y) */}
+          {gradeChanged && (
+            <span className="text-xs tabular-nums text-muted-foreground/50">
+              {previousGrade}
+              <span className="mx-1 opacity-40">→</span>
+              <span className={improved ? "text-emerald-400/80" : "text-rose-400/80"}>
+                {currentGrade}
+              </span>
+            </span>
+          )}
 
           {!!elapsedSec && elapsedSec > 0 && (
             <span className="ml-auto text-xs tabular-nums text-muted-foreground/35">

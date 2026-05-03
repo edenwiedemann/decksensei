@@ -13,8 +13,10 @@ import {
   FileText,
   Copy,
   Check,
+  Link,
   type LucideIcon,
 } from "lucide-react";
+import { sectionSlug } from "@/lib/deck-score";
 import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
 import type { SuggestionsParseResult } from "./SuggestionsCard";
 import FeedbackBlock from "./FeedbackBlock";
@@ -348,6 +350,17 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
   const Icon = meta.icon;
   const showCursor = isLast && streaming;
   const [sectionCopied, setSectionCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  async function handleLinkCopy() {
+    try {
+      const slug = sectionSlug(section.title);
+      const base = window.location.href.split("#")[0];
+      await navigator.clipboard.writeText(`${base}#${slug}`);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {}
+  }
 
   async function handleSectionCopy() {
     try {
@@ -445,8 +458,10 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
     );
   }
 
+  const slug = sectionSlug(section.title);
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border/50 bg-card">
+    <div id={slug} className="overflow-hidden rounded-xl border border-border/50 bg-card scroll-mt-20">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border/30 px-5 py-4">
         <span
@@ -458,16 +473,28 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
           {section.title}
         </h2>
         {!streaming && (
-          <button
-            onClick={handleSectionCopy}
-            className="ml-auto rounded p-1.5 text-muted-foreground/25 transition-colors hover:text-muted-foreground/70"
-            aria-label="Copiar seção"
-            title="Copiar seção"
-          >
-            {sectionCopied
-              ? <Check className="h-3.5 w-3.5 text-emerald-400" />
-              : <Copy className="h-3.5 w-3.5" />}
-          </button>
+          <div className="ml-auto flex items-center gap-0.5">
+            <button
+              onClick={handleLinkCopy}
+              className="rounded p-1.5 text-muted-foreground/20 transition-colors hover:text-muted-foreground/60"
+              aria-label="Copiar link para esta seção"
+              title="Copiar link"
+            >
+              {linkCopied
+                ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+                : <Link className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={handleSectionCopy}
+              className="rounded p-1.5 text-muted-foreground/25 transition-colors hover:text-muted-foreground/70"
+              aria-label="Copiar seção"
+              title="Copiar texto"
+            >
+              {sectionCopied
+                ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+                : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         )}
       </div>
 
