@@ -16,15 +16,26 @@ import crypto from "crypto";
 import { adminSessionValue } from "@/lib/auth/admin";
 import { runPipeline } from "@/lib/evidence/runner";
 import type { EvidencePipeline } from "@/lib/evidence/types";
+import { BandaiWorldsFinalPipeline } from "@/lib/evidence/pipelines/bandai/worlds-final";
+import { BandaiRegionalsPipeline } from "@/lib/evidence/pipelines/bandai/regionals";
+import { BandaiUltimateCupPipeline } from "@/lib/evidence/pipelines/bandai/ultimate-cup";
+import { BandaiStoreChampionshipPipeline } from "@/lib/evidence/pipelines/bandai/store-championship";
 
-/** Mapa de pipelines disponíveis para teste — populado nas sessões B-D. */
-const PIPELINE_REGISTRY = new Map<string, EvidencePipeline>();
+const ALL_PIPELINES: EvidencePipeline[] = [
+  new BandaiWorldsFinalPipeline(),
+  new BandaiRegionalsPipeline(),
+  new BandaiUltimateCupPipeline(),
+  new BandaiStoreChampionshipPipeline(),
+];
+
+const PIPELINE_REGISTRY = new Map<string, EvidencePipeline>(
+  ALL_PIPELINES.map((p) => [p.sourceId, p]),
+);
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ source: string }> },
 ) {
-  // ── Autenticação admin ────────────────────────────────────────────────────
   const authorized = await isAdminAuthorized(req);
   if (!authorized) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -39,7 +50,7 @@ export async function POST(
       {
         error: "pipeline_not_found",
         available,
-        message: `Pipeline "${source}" não registrada. Disponíveis: ${available.join(", ") || "(nenhuma ainda — sessões B-D)"}`,
+        message: `Pipeline "${source}" não registrada. Disponíveis: ${available.join(", ")}`,
       },
       { status: 404 },
     );
@@ -55,7 +66,6 @@ export async function POST(
 }
 
 async function isAdminAuthorized(req: NextRequest): Promise<boolean> {
-  // Via header x-admin-token
   const headerToken = req.headers.get("x-admin-token");
   if (headerToken) {
     try {
@@ -72,7 +82,6 @@ async function isAdminAuthorized(req: NextRequest): Promise<boolean> {
     }
   }
 
-  // Via cookie admin_session
   try {
     const cookieStore = await cookies();
     const adminCookie = cookieStore.get("admin_session")?.value ?? "";
