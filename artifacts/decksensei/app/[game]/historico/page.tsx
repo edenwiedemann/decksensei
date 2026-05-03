@@ -10,20 +10,13 @@ import {
   and,
   isNull,
   desc,
-  lt,
   sql,
 } from "@workspace/db";
 import HistoricoList from "./HistoricoList";
+import { encodeCursor, GRADE_REGEX } from "@/app/api/analyses/history/route";
 import type { DeckGrade } from "@/lib/deck-score";
 
 const PAGE_SIZE = 20;
-
-const GRADE_REGEX: Record<DeckGrade, string> = {
-  A: String.raw`similaridade aproximada\s*\*\*(8[0-9]|9[0-9]|100)%`,
-  B: String.raw`similaridade aproximada\s*\*\*(6[5-9]|7[0-9])%`,
-  C: String.raw`similaridade aproximada\s*\*\*(5[0-9]|6[0-4])%`,
-  D: String.raw`similaridade aproximada\s*\*\*([0-9]|[1-4][0-9])%`,
-};
 
 const VALID_GRADES = new Set<string>(["A", "B", "C", "D"]);
 
@@ -79,7 +72,7 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
             : undefined,
         ),
       )
-      .orderBy(desc(analysesTable.createdAt))
+      .orderBy(desc(analysesTable.createdAt), desc(analysesTable.id))
       .limit(PAGE_SIZE + 1),
   ]);
 
@@ -87,9 +80,11 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
 
   const hasMore = rows.length > PAGE_SIZE;
   const initialItems = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-  const initialNextCursor = hasMore
-    ? initialItems[initialItems.length - 1]!.createdAt.toISOString()
-    : null;
+  const lastItem = initialItems[initialItems.length - 1];
+  const initialNextCursor =
+    hasMore && lastItem
+      ? encodeCursor(lastItem.createdAt, lastItem.id)
+      : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">

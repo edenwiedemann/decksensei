@@ -43,8 +43,7 @@ const GRADES: DeckGrade[] = ["A", "B", "C", "D"];
 
 const CHIP_BASE =
   "rounded-full border px-3 py-1 text-xs font-semibold transition-colors";
-const CHIP_ACTIVE =
-  "border-primary/60 bg-primary/15 text-primary";
+const CHIP_ACTIVE = "border-primary/60 bg-primary/15 text-primary";
 const CHIP_INACTIVE =
   "border-border/40 bg-card/40 text-muted-foreground hover:border-border hover:text-foreground";
 
@@ -121,7 +120,8 @@ export default function HistoricoList({
       })
     : items;
 
-  const isLoading = switching;
+  const isSearching = query.trim().length > 0;
+  const hasMorePages = nextCursor !== null;
 
   return (
     <>
@@ -134,13 +134,19 @@ export default function HistoricoList({
           placeholder="Buscar pelo nome do deck..."
           className="w-full rounded-lg border border-border/50 bg-card/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
         />
+        {/* Aviso quando a busca é sobre um subconjunto das análises */}
+        {isSearching && hasMorePages && (
+          <p className="mt-1.5 text-xs text-muted-foreground/60">
+            Buscando em {items.length} análises carregadas — carregue mais para busca completa.
+          </p>
+        )}
       </div>
 
-      {/* Chips de grade */}
+      {/* Chips de filtro por grade */}
       <div className="mb-6 flex flex-wrap gap-2">
         <button
           onClick={() => handleGradeChange(null)}
-          disabled={isLoading}
+          disabled={switching}
           className={`${CHIP_BASE} ${activeGrade === null ? CHIP_ACTIVE : CHIP_INACTIVE}`}
         >
           Todas
@@ -149,7 +155,7 @@ export default function HistoricoList({
           <button
             key={g}
             onClick={() => handleGradeChange(g)}
-            disabled={isLoading}
+            disabled={switching}
             className={`${CHIP_BASE} ${activeGrade === g ? CHIP_ACTIVE : CHIP_INACTIVE}`}
           >
             Nota {g}
@@ -157,19 +163,21 @@ export default function HistoricoList({
         ))}
       </div>
 
-      {/* Lista */}
-      {isLoading ? (
+      {/* Conteúdo */}
+      {switching ? (
         <div className="flex items-center justify-center py-16">
-          <span className="text-sm text-muted-foreground animate-pulse">Carregando…</span>
+          <span className="text-sm text-muted-foreground animate-pulse">
+            Carregando…
+          </span>
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-border/40 bg-card/60 px-6 py-10 text-center">
           <p className="text-sm text-muted-foreground">
-            {query.trim() || activeGrade
+            {isSearching || activeGrade
               ? "Nenhuma análise encontrada para esse filtro."
               : "Você ainda não fez nenhuma análise com essa conta."}
           </p>
-          {!query.trim() && !activeGrade && (
+          {!isSearching && !activeGrade && (
             <a
               href={`/${game}`}
               className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
@@ -209,7 +217,9 @@ export default function HistoricoList({
                       </p>
                     </div>
                     <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
-                      <span className="text-xs text-muted-foreground/60">{date}</span>
+                      <span className="text-xs text-muted-foreground/60">
+                        {date}
+                      </span>
                       {grade && (
                         <span
                           className={`inline-flex h-7 w-7 items-center justify-center rounded border text-sm font-black tabular-nums ${GRADE_COLORS[grade]}`}
@@ -227,9 +237,9 @@ export default function HistoricoList({
             })}
           </div>
 
-          {/* Botão carregar mais */}
-          {nextCursor && !query.trim() && (
-            <div className="mt-6 flex justify-center">
+          {/* Botão "Carregar mais" — visível mesmo durante busca */}
+          {hasMorePages && (
+            <div className="mt-6 flex flex-col items-center gap-2">
               <button
                 onClick={handleLoadMore}
                 disabled={loadingMore}

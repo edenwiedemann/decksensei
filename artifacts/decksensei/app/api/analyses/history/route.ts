@@ -5,8 +5,11 @@ export const runtime = "nodejs";
  *
  * Query params:
  *   game   — game_id (obrigatório)
- *   cursor — ISO timestamp do último item visto (paginação keyset)
+ *   cursor — cursor composto "createdAt_ISO|id" do último item da página anterior
  *   grade  — A | B | C | D (filtro opcional)
+ *
+ * Paginação keyset estável: ORDER BY created_at DESC, id DESC.
+ * O cursor composto evita que itens com o mesmo timestamp sejam pulados.
  *
  * Retorna: { items: AnalysisItem[], nextCursor: string | null }
  * Tamanho de página: 20 itens
@@ -19,6 +22,7 @@ import {
   analysesTable,
   eq,
   and,
+  or,
   isNull,
   desc,
   lt,
@@ -30,7 +34,7 @@ import type { DeckGrade } from "@/lib/deck-score";
 
 const PAGE_SIZE = 20;
 
-const GRADE_REGEX: Record<DeckGrade, string> = {
+export const GRADE_REGEX: Record<DeckGrade, string> = {
   A: String.raw`similaridade aproximada\s*\*\*(8[0-9]|9[0-9]|100)%`,
   B: String.raw`similaridade aproximada\s*\*\*(6[5-9]|7[0-9])%`,
   C: String.raw`similaridade aproximada\s*\*\*(5[0-9]|6[0-4])%`,
@@ -38,6 +42,21 @@ const GRADE_REGEX: Record<DeckGrade, string> = {
 };
 
 const VALID_GRADES = new Set<string>(["A", "B", "C", "D"]);
+
+/** Encodes the last item of a page into a stable opaque cursor string. */
+export function encodeCursor(createdAt: Date, id: string): string {
+  return `${createdAt.toISOString()}|${id}`;
+}
+
+/** Parses an opaque cursor; returns null on malformed input. */
+function parseCursor(raw: string): { ts: Date; id: string } | null {
+  const sep = raw.lastIndexOf("|");
+  if (sep < 1) return null;
+  const ts = new Date(raw.slice(0, sep));
+  const id = raw.slice(sep + 1);
+  if (isNaN(ts.getTime()) || !id) return null;
+  return { ts, id };
+}
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
@@ -63,19 +82,19 @@ export async function GET(req: NextRequest) {
   const grade: DeckGrade | null =
     gradeRaw && VALID_GRADES.has(gradeRaw) ? (gradeRaw as DeckGrade) : null;
 
-  const cursorDate = cursorRaw ? new Date(cursorRaw) : null;
+  const cursor = cursorRaw ? parseCursor(cursorRaw) : null;
 
-  const conditions = [
-    eq(analysesTable.gameId, game),
-    eq(analysesTable.userId, user.id),
-    isNull(analysesTable.deletedAt),
-    ...(cursorDate && !isNaN(cursorDate.getTime())
-      ? [lt(analysesTable.createdAt, cursorDate)]
-      : []),
-    ...(grade
-      ? [sql`${analysesTable.analysisText} ~ ${GRADE_REGEX[grade]}`]
-      : []),
-  ];
+  // Keyset condition for ORDER BY created_at DESC, id DESC:
+  //   (created_at < cursor.ts) OR (created_at = cursor.ts AND id < cursor.id)
+  const cursorCondition = cursor
+    ? or(
+        lt(analysesTable.createdAt, cursor.ts),
+        and(
+          sql`${analysesTable.createdAt} = ${cursor.ts.toISOString()}`,
+          sql`${analysesTable.id} < ${cursor.id}`,
+        ),
+      )
+    : undefined;
 
   const rows = await db
     .select({
@@ -86,15 +105,25 @@ export async function GET(req: NextRequest) {
       similarArchetypeId: analysesTable.similarArchetypeId,
     })
     .from(analysesTable)
-    .where(and(...conditions))
-    .orderBy(desc(analysesTable.createdAt))
+    .where(
+      and(
+        eq(analysesTable.gameId, game),
+        eq(analysesTable.userId, user.id),
+        isNull(analysesTable.deletedAt),
+        cursorCondition,
+        grade
+          ? sql`${analysesTable.analysisText} ~ ${GRADE_REGEX[grade]}`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(analysesTable.createdAt), desc(analysesTable.id))
     .limit(PAGE_SIZE + 1);
 
   const hasMore = rows.length > PAGE_SIZE;
   const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-  const nextCursor = hasMore
-    ? items[items.length - 1]!.createdAt.toISOString()
-    : null;
+  const lastItem = items[items.length - 1];
+  const nextCursor =
+    hasMore && lastItem ? encodeCursor(lastItem.createdAt, lastItem.id) : null;
 
   return NextResponse.json({ items, nextCursor });
 }
