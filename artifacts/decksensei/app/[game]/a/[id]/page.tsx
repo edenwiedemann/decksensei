@@ -195,14 +195,19 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
       </header>
 
       {/* Sticky bottom CTA */}
-      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border/40 bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center gap-4 px-6 py-3">
-          <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
-            Quer analisar o seu próprio deck?
-          </p>
+      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-primary/20 bg-gradient-to-r from-background/98 via-background/98 to-primary/5 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.5)]">
+        <div className="mx-auto flex max-w-2xl items-center gap-4 px-6 py-3.5">
+          <div className="hidden flex-1 flex-col sm:flex">
+            <p className="text-sm font-medium text-foreground/90">
+              {grade
+                ? `Seu deck pode alcançar nota ${grade.grade}?`
+                : "Quer analisar o seu próprio deck?"}
+            </p>
+            <p className="text-xs text-muted-foreground/60">Análise gratuita em 30 segundos</p>
+          </div>
           <a
             href={`/${game}`}
-            className="ml-auto inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+            className="ml-auto inline-flex h-11 items-center justify-center rounded-lg bg-primary px-7 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 ring-1 ring-primary/50 transition-all hover:bg-primary/90 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.99]"
           >
             Analisar meu deck grátis →
           </a>

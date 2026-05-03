@@ -276,6 +276,7 @@ export default function DeckInput({
 
   const parsed = useMemo(() => {
     if (!deck.trim()) return null;
+    if (!gameConfig.parser) return null;
     const parser = getParser(gameConfig.parser);
     return parser.parse(deck);
   }, [deck, gameConfig.parser]);
