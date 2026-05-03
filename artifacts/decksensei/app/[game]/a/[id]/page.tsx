@@ -19,6 +19,18 @@ function plainText(md: string, maxLen = 160): string {
     .slice(0, maxLen);
 }
 
+/** Extrai o nome do arquétipo mais próximo do texto da análise. */
+function extractArchetype(text: string): string | null {
+  const m = text.match(/Arquetipo mais pr[oó]ximo:\s*\*\*([^*]+)\*\*/);
+  return m ? m[1].trim() : null;
+}
+
+/** Extrai o texto da seção Visão geral para usar como descrição OG. */
+function extractOverview(text: string): string | null {
+  const m = text.match(/## Visão geral\n([\s\S]*?)(?=\n## |$)/);
+  return m ? plainText(m[1]) : null;
+}
+
 // ─── Data fetching ─────────────────────────────────────────────────────────────
 
 async function getAnalysis(id: string, gameId: string) {
@@ -60,16 +72,17 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
     return { title: "Análise não encontrada — Deck Sensei" };
   }
 
-  const description = plainText(analysis.analysisText);
   const grade = computeDeckGrade(analysis.analysisText);
-  const fallbackLabel = analysis.similarArchetypeId
-    ? `${analysis.similarArchetypeId}${grade ? ` (${grade.grade})` : ""}`
-    : grade
-      ? `Deck ${grade.grade} — ${analysis.gameName}`
-      : `Análise de deck ${analysis.gameName}`;
+  const archetype = extractArchetype(analysis.analysisText) ?? analysis.similarArchetypeId ?? null;
+  const overview = extractOverview(analysis.analysisText);
+  const description = overview ?? plainText(analysis.analysisText);
+
+  const gradePrefix = grade ? `Nota ${grade.grade}` : null;
   const title = analysis.deckName
     ? `${analysis.deckName} — Análise ${analysis.gameName} · Deck Sensei`
-    : `${fallbackLabel} · Deck Sensei`;
+    : [gradePrefix, archetype].filter(Boolean).join(" · ")
+        ? `${[gradePrefix, archetype].filter(Boolean).join(" · ")} — Deck Sensei`
+        : `Análise de deck ${analysis.gameName} — Deck Sensei`;
   const url = `https://decksensei.com.br/${game}/a/${id}`;
 
   return {

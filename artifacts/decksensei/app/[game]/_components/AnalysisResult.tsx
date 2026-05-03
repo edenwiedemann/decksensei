@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -17,6 +17,8 @@ import {
   Info,
   ThumbsUp,
   ThumbsDown,
+  Download,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 import { sectionSlug } from "@/lib/deck-score";
@@ -633,6 +635,172 @@ function CopyAllButton({ text }: { text: string }) {
   );
 }
 
+// ─── ExportImageButton ────────────────────────────────────────────────────────
+
+function ExportImageButton({
+  containerRef,
+  grade,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  grade: string;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleExport() {
+    if (!containerRef.current) return;
+    setLoading(true);
+    try {
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(containerRef.current, {
+        cacheBust: true,
+        backgroundColor: "hsl(240 30% 5%)",
+        pixelRatio: 2,
+      });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `deck-sensei-${grade}.png`;
+      a.click();
+    } catch (err) {
+      console.error("Export PNG failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleExport}
+      disabled={loading}
+      className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:border-border/70 hover:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {loading ? (
+        <>
+          <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+          Gerando...
+        </>
+      ) : (
+        <>
+          <Download className="h-3 w-3" />
+          Baixar análise
+        </>
+      )}
+    </button>
+  );
+}
+
+// ─── ShareMenu ────────────────────────────────────────────────────────────────
+
+function ShareMenu({
+  grade,
+  archetypeName,
+  shareUrl,
+}: {
+  grade: string;
+  archetypeName?: string;
+  shareUrl?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  function getUrl() {
+    return shareUrl ?? (typeof window !== "undefined" ? window.location.href : "");
+  }
+
+  function buildShareText() {
+    const arch = archetypeName ? ` (${archetypeName})` : "";
+    return `Meu deck recebeu nota ${grade}${arch} no Deck Sensei! Confira a análise completa: ${getUrl()}`;
+  }
+
+  function handleWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildShareText())}`, "_blank");
+    setOpen(false);
+  }
+
+  function handleTwitter() {
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(buildShareText())}`, "_blank");
+    setOpen(false);
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(getUrl());
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+        setOpen(false);
+      }, 1500);
+    } catch {}
+  }
+
+  return (
+    <div ref={popoverRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:border-border/70 hover:text-muted-foreground"
+      >
+        <Share2 className="h-3 w-3" />
+        Compartilhar
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-xl border border-border/50 bg-card shadow-xl">
+          <button
+            type="button"
+            onClick={handleWhatsApp}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-current text-emerald-500" aria-hidden="true">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.558 4.112 1.528 5.84L.057 23.512a.5.5 0 0 0 .609.61l5.78-1.516A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.368l-.36-.214-3.726.977.995-3.633-.235-.374A9.818 9.818 0 1 1 12 21.818z" />
+            </svg>
+            WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={handleTwitter}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-current" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.259 5.631L18.244 2.25zM17.083 20.001h1.834L6.957 4.126H4.993L17.083 20.001z" />
+            </svg>
+            Twitter / X
+          </button>
+
+          <div className="h-px bg-border/30" />
+
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            {linkCopied ? (
+              <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+            ) : (
+              <Link className="h-4 w-4 shrink-0" />
+            )}
+            {linkCopied ? "Copiado!" : "Copiar link"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── FallbackProse ────────────────────────────────────────────────────────────
 
 interface FallbackProseProps {
@@ -663,9 +831,12 @@ interface AnalysisResultProps {
   streaming: boolean;
   colorMap: Record<string, string>;
   analysisId?: string;
+  shareUrl?: string;
 }
 
-export default function AnalysisResult({ text, streaming, colorMap, analysisId }: AnalysisResultProps) {
+export default function AnalysisResult({ text, streaming, colorMap, analysisId, shareUrl }: AnalysisResultProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Só verifica o formato depois que o stream terminou — durante o stream o
   // texto é parcial e os headers chegam progressivamente.
   if (!streaming) {
@@ -685,13 +856,26 @@ export default function AnalysisResult({ text, streaming, colorMap, analysisId }
 
   const deckScore = !streaming ? computeDeckGrade(text) : null;
 
+  const archetypeName = !streaming
+    ? (() => {
+        const m = text.match(/Arquetipo mais pr[oó]ximo:\s*\*\*([^*]+)\*\*/);
+        return m ? m[1].trim() : undefined;
+      })()
+    : undefined;
+
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={containerRef} className="flex flex-col gap-4">
       {deckScore && (
         <DeckScoreBadge grade={deckScore.grade} pct={deckScore.pct} />
       )}
       {!streaming && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ExportImageButton containerRef={containerRef} grade={deckScore?.grade ?? "?"} />
+          <ShareMenu
+            grade={deckScore?.grade ?? "?"}
+            archetypeName={archetypeName}
+            shareUrl={shareUrl}
+          />
           <CopyAllButton text={text} />
         </div>
       )}

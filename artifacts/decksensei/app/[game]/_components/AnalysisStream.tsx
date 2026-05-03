@@ -130,6 +130,7 @@ export default function AnalysisStream({
             streaming={phase === "streaming"}
             colorMap={colorMap}
             analysisId={analysisId || undefined}
+            shareUrl={analysisId ? `${typeof window !== "undefined" ? window.location.origin : ""}/${gameId}/a/${analysisId}` : undefined}
           />
         </AnalysisErrorBoundary>
       )}
