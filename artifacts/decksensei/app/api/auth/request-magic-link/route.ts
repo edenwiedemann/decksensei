@@ -18,6 +18,11 @@ import { upsertUser, updateUserLocation } from "@/lib/db/users";
 import { generateToken } from "@/lib/auth/magic-link";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
+import {
+  emailShell,
+  emailButton,
+  emailFallbackLink,
+} from "@/lib/email-templates";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,59 +33,32 @@ const OK = NextResponse.json({ ok: true }, { status: 200 });
 // ─── Email HTML de autenticação ───────────────────────────────────────────────
 
 function buildMagicLinkEmail(link: string, email: string): { html: string; text: string } {
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Seu link de acesso — Deck Sensei</title>
-</head>
-<body style="background:#0f1117;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:20px;">
-  <div style="max-width:520px;margin:0 auto;">
+  const bodyHtml = `
+    <h1 style="font-size:22px;font-weight:700;color:#f1f5f9;margin:0 0 12px;letter-spacing:-0.3px;">
+      Seu link de acesso chegou
+    </h1>
+    <p style="font-size:15px;line-height:1.65;color:#94a3b8;margin:0 0 28px;">
+      Clica no botão abaixo para entrar no Deck Sensei.
+    </p>
+    ${emailButton(link, "Entrar no Deck Sensei →")}
+    ${emailFallbackLink(link)}
+  `;
 
-    <!-- Header -->
-    <div style="padding:28px 0 22px;border-bottom:1px solid #1f2937;">
-      <span style="font-size:20px;font-weight:700;color:#f9fafb;letter-spacing:-0.3px;">Deck Sensei</span>
-    </div>
+  const footerHtml = `
+    <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:0 0 6px;">
+      O link expira em <strong style="color:#9ca3af;">15 minutos</strong> e só pode ser usado uma vez.
+      Se não foi você que pediu, ignore este email — nenhuma ação é necessária.
+    </p>
+    <p style="font-size:11px;color:#6b7280;margin:0;">
+      Enviado para ${email} · Deck Sensei
+    </p>
+  `;
 
-    <!-- Body -->
-    <div style="padding:36px 0 28px;">
-      <h1 style="font-size:22px;font-weight:700;color:#f1f5f9;margin:0 0 12px;letter-spacing:-0.3px;">
-        Seu link de acesso chegou
-      </h1>
-      <p style="font-size:15px;line-height:1.65;color:#94a3b8;margin:0 0 28px;">
-        Clica no botão abaixo para entrar no Deck Sensei.
-      </p>
-
-      <!-- CTA Button -->
-      <div style="text-align:center;margin:0 0 28px;">
-        <a href="${link}"
-           style="display:inline-block;background:#6366f1;color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600;letter-spacing:0.01em;line-height:1;">
-          Entrar no Deck Sensei →
-        </a>
-      </div>
-
-      <!-- Fallback link -->
-      <p style="font-size:12px;line-height:1.6;color:#4b5563;margin:0;text-align:center;">
-        Botão não funcionou? Copia e cola esse link no navegador:<br>
-        <a href="${link}" style="color:#6366f1;word-break:break-all;">${link}</a>
-      </p>
-    </div>
-
-    <!-- Footer -->
-    <div style="border-top:1px solid #1f2937;padding:20px 0 0;">
-      <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:0 0 6px;">
-        O link expira em <strong style="color:#9ca3af;">15 minutos</strong> e só pode ser usado uma vez.
-        Se não foi você que pediu, ignore este email — nenhuma ação é necessária.
-      </p>
-      <p style="font-size:11px;color:#6b7280;margin:0;">
-        Enviado para ${email} · Deck Sensei
-      </p>
-    </div>
-
-  </div>
-</body>
-</html>`;
+  const html = emailShell({
+    title: "Seu link de acesso — Deck Sensei",
+    bodyHtml,
+    footerHtml,
+  });
 
   const text = [
     "Olá!",
