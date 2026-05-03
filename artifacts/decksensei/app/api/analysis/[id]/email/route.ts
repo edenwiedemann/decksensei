@@ -18,6 +18,8 @@ import {
   emailGameBadge,
   emailAnalysisCta,
   markdownToEmailHtml,
+  BRAND_NAME,
+  BRAND_FROM,
 } from "@/lib/email-templates";
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -30,11 +32,11 @@ function buildEmailHtml(
   gameName: string,
 ): string {
   return emailShell({
-    title: `Sua análise de deck ${gameName} — Deck Sensei`,
+    title: `Sua análise de deck ${gameName} — ${BRAND_NAME}`,
     badge: emailGameBadge(gameName),
     maxWidth: 600,
     bodyHtml: htmlContent + emailAnalysisCta(analysisUrl),
-    footerHtml: `<p style="text-align:center;color:#4b5563;font-size:11px;margin:0;">Você recebeu este email porque pediu na análise do Deck Sensei.</p>`,
+    footerHtml: `<p style="text-align:center;color:#4b5563;font-size:11px;margin:0;">Você recebeu este email porque pediu na análise do ${BRAND_NAME}.</p>`,
   });
 }
 
@@ -99,13 +101,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const htmlContent = markdownToEmailHtml(row.analysisText);
   const html = buildEmailHtml(htmlContent, analysisUrl, row.gameName);
 
-  const from =
-    process.env.RESEND_FROM_EMAIL ?? "Deck Sensei <onboarding@resend.dev>";
-
   const { error: resendError } = await resend.emails.send({
-    from,
+    from: BRAND_FROM,
     to: [email],
-    subject: `Sua análise de deck ${row.gameName} — Deck Sensei`,
+    subject: `Sua análise de deck ${row.gameName} — ${BRAND_NAME}`,
     html,
     text: row.analysisText,
   });

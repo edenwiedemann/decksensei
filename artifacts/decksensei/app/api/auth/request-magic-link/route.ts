@@ -22,6 +22,8 @@ import {
   emailShell,
   emailButton,
   emailFallbackLink,
+  BRAND_NAME,
+  BRAND_FROM,
 } from "@/lib/email-templates";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,7 +42,7 @@ function buildMagicLinkEmail(link: string, email: string): { html: string; text:
     <p style="font-size:15px;line-height:1.65;color:#94a3b8;margin:0 0 28px;">
       Clica no botão abaixo para entrar no Deck Sensei.
     </p>
-    ${emailButton(link, "Entrar no Deck Sensei →")}
+    ${emailButton(link, `Entrar no ${BRAND_NAME} →`)}
     ${emailFallbackLink(link)}
   `;
 
@@ -50,12 +52,12 @@ function buildMagicLinkEmail(link: string, email: string): { html: string; text:
       Se não foi você que pediu, ignore este email — nenhuma ação é necessária.
     </p>
     <p style="font-size:11px;color:#6b7280;margin:0;">
-      Enviado para ${email} · Deck Sensei
+      Enviado para ${email} · ${BRAND_NAME}
     </p>
   `;
 
   const html = emailShell({
-    title: "Seu link de acesso — Deck Sensei",
+    title: `Seu link de acesso — ${BRAND_NAME}`,
     bodyHtml,
     footerHtml,
   });
@@ -63,13 +65,13 @@ function buildMagicLinkEmail(link: string, email: string): { html: string; text:
   const text = [
     "Olá!",
     "",
-    "Seu link de acesso ao Deck Sensei:",
+    `Seu link de acesso ao ${BRAND_NAME}:`,
     link,
     "",
     "Esse link expira em 15 minutos e só pode ser usado uma vez.",
     "Se não foi você, ignore esse email.",
     "",
-    "— Deck Sensei",
+    `— ${BRAND_NAME}`,
   ].join("\n");
 
   return { html, text };
@@ -140,7 +142,7 @@ export async function POST(req: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: "Deck Sensei <noreply@decksensei.com.br>",
+        from: BRAND_FROM,
         to: normalizedEmail,
         subject: "Seu link de acesso ao Deck Sensei",
         html,

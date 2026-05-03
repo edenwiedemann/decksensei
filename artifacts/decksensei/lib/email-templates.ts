@@ -5,6 +5,11 @@
  * alterações de marca (cores, fonte, logo) se propaguem em um único lugar.
  */
 
+// ─── Constantes de marca ──────────────────────────────────────────────────────
+
+export const BRAND_NAME = "Deck Sensei";
+export const BRAND_FROM = "Deck Sensei <noreply@decksensei.com.br>";
+
 // ─── Tokens de design ─────────────────────────────────────────────────────────
 
 const T = {
