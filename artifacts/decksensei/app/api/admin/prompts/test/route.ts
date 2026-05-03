@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth/admin";
+import { checkDailyCap } from "@/lib/cost-tracker";
 import { db, pool, analysesTable, eq, isNull, and } from "@workspace/db";
 import { buildAnalysisPrompt, PromptBuildError } from "@/lib/analysis-prompt";
 import Anthropic, {
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest) {
   }
   if (!analysisId?.trim()) {
     return Response.json({ error: "analysisId é obrigatório." }, { status: 400 });
+  }
+
+  const capCheck = await checkDailyCap();
+  if (!capCheck.allowed) {
+    return Response.json(
+      { error: "daily_cap", message_pt: "Cap diário atingido — testes pausados pra preservar produção." },
+      { status: 503 }
+    );
   }
 
   // Carrega deck da análise escolhida
