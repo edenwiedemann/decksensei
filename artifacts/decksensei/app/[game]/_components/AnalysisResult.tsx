@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
+import type { SuggestionsParseResult } from "./SuggestionsCard";
 import FeedbackBlock from "./FeedbackBlock";
 
 // ─── Configuração das seções ──────────────────────────────────────────────────
@@ -316,9 +317,10 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
 
   // Para sugestões: só renderiza o card especial quando o stream terminou
   // (assim o bloco ```sugestoes``` está completo e parseável)
-  const suggestions = isSuggestions && !streaming
-    ? parseSuggestionsBlock(section.content)
-    : null;
+  const suggestionsResult: SuggestionsParseResult | null =
+    isSuggestions && !streaming
+      ? parseSuggestionsBlock(section.content)
+      : null;
 
   function renderContent() {
     if (!section.content.trim()) {
@@ -334,8 +336,23 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
     }
 
     // Seção de sugestões com card especial (stream terminou + parse ok)
-    if (isSuggestions && suggestions) {
-      return <SuggestionsCard suggestions={suggestions} />;
+    if (isSuggestions && suggestionsResult?.ok === true) {
+      return <SuggestionsCard suggestions={suggestionsResult.data} />;
+    }
+
+    // Fallback quando o JSON do bloco sugestoes estava malformado
+    if (isSuggestions && suggestionsResult?.ok === false) {
+      return (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground/70">
+            Não conseguimos exibir as sugestões em formato visual. Veja o texto
+            cru abaixo:
+          </p>
+          <pre className="overflow-x-auto rounded-lg border border-border/30 bg-muted/20 px-4 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground/80 whitespace-pre-wrap break-all">
+            {suggestionsResult.raw}
+          </pre>
+        </div>
+      );
     }
 
     // Seção de sugestões ainda streamando — mostra markdown puro (inclui o JSON bruto)

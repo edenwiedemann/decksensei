@@ -13,17 +13,28 @@ export interface SwapSuggestion {
 
 // ─── Parser do bloco ```sugestoes ... ``` ────────────────────────────────────
 
+export type SuggestionsParseResult =
+  | { ok: true; data: SwapSuggestion[] }
+  | { ok: false; raw: string };
+
 /**
  * Extrai e faz parse do bloco JSON dentro de ```sugestoes ... ```.
- * Retorna null se o bloco ainda não chegou (streaming) ou é inválido.
+ *
+ * Retorna:
+ *   null                    → bloco ainda não chegou (streaming) ou array vazio após filtro
+ *   { ok: true, data }      → parseado com sucesso
+ *   { ok: false, raw }      → bloco encontrado mas JSON inválido (loga console.warn)
  */
-export function parseSuggestionsBlock(markdown: string): SwapSuggestion[] | null {
+export function parseSuggestionsBlock(
+  markdown: string,
+): SuggestionsParseResult | null {
   const match = markdown.match(/```sugestoes\s*([\s\S]*?)```/);
   if (!match) return null;
+  const raw = match[1].trim();
   try {
-    const parsed: unknown = JSON.parse(match[1].trim());
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    return (parsed as SwapSuggestion[]).filter(
+    const data = (parsed as SwapSuggestion[]).filter(
       (s) =>
         s?.remove?.code &&
         s?.remove?.name &&
@@ -31,8 +42,15 @@ export function parseSuggestionsBlock(markdown: string): SwapSuggestion[] | null
         s?.add?.name &&
         typeof s?.reason_pt === "string",
     );
-  } catch {
-    return null;
+    if (data.length === 0) return null;
+    return { ok: true, data };
+  } catch (err) {
+    console.warn(
+      "[SuggestionsCard] JSON.parse falhou no bloco ```sugestoes``` — " +
+        "considerar ajuste no prompt para formato mais estrito.",
+      { raw, err },
+    );
+    return { ok: false, raw };
   }
 }
 
