@@ -102,6 +102,16 @@ export default async function HistoricoPage({ params, searchParams }: PageParams
         <span className="ml-auto text-xs text-muted-foreground">
           {user.email}
         </span>
+        <form action="/api/auth/session" method="post">
+          <input type="hidden" name="_method" value="DELETE" />
+          <input type="hidden" name="game" value={game} />
+          <button
+            type="submit"
+            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+          >
+            Sair
+          </button>
+        </form>
       </header>
 
       <main className="mx-auto max-w-2xl px-6 py-12 pb-24">

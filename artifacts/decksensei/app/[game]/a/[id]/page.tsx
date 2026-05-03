@@ -180,6 +180,18 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
           {analysis.gameName}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">{date}</span>
+        {isOwner && (
+          <form action="/api/auth/session" method="post">
+            <input type="hidden" name="_method" value="DELETE" />
+            <input type="hidden" name="game" value={game} />
+            <button
+              type="submit"
+              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+            >
+              Sair
+            </button>
+          </form>
+        )}
       </header>
 
       {/* Sticky bottom CTA */}
