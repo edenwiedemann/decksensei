@@ -20,12 +20,14 @@ import { BandaiWorldsFinalPipeline } from "@/lib/evidence/pipelines/bandai/world
 import { BandaiRegionalsPipeline } from "@/lib/evidence/pipelines/bandai/regionals";
 import { BandaiUltimateCupPipeline } from "@/lib/evidence/pipelines/bandai/ultimate-cup";
 import { BandaiStoreChampionshipPipeline } from "@/lib/evidence/pipelines/bandai/store-championship";
+import { LimitlessPipeline } from "@/lib/evidence/pipelines/limitless/index";
 
 const ALL_PIPELINES: EvidencePipeline[] = [
   new BandaiWorldsFinalPipeline(),
   new BandaiRegionalsPipeline(),
   new BandaiUltimateCupPipeline(),
   new BandaiStoreChampionshipPipeline(),
+  new LimitlessPipeline(),
 ];
 
 const PIPELINE_REGISTRY = new Map<string, EvidencePipeline>(

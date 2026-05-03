@@ -1,0 +1,153 @@
+Implementa pipeline Limitless (peso 50, agregador). Estrutura completa em
+pipelines-evidencias.md.
+
+═══ PARTE 1: Pipeline Limitless ═══
+
+Cria lib/evidence/pipelines/limitless/index.ts:
+
+  export class LimitlessPipeline implements EvidencePipeline {
+    sourceId = "limitless-tcg";
+    
+    async validateFingerprint(): Promise<FingerprintCheck> {
+      const failures = [];
+      
+      // Pega o currentFormat do games.config (cadastrado pelo admin, ex: "BT21")
+      const game = await getGame("digimon");
+      const currentFormat = game.config.current_format ?? "BT21";
+      const url = `https://play.limitlesstcg.com/decks?game=DCG&format=standard&set=${currentFormat}`;
+      
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) failures.push("Limitless returned " + res.status);
+      const html = await res.text();
+      
+      // Esperamos encontrar links pra /decks/{slug}
+      if (!/href="\/decks\/[^"?]+\?game=DCG/.test(html)) {
+        failures.push("Limitless: layout mudou — nenhum link /decks/{slug} encontrado");
+      }
+      
+      // Esperamos string mágica do decklist export
+      // (vamos puxar UMA decklist sample e verificar que `const decklist = `` ainda existe)
+      const archMatch = html.match(/href="(\/decks\/[^"?]+)\?/);
+      if (archMatch) {
+        const archRes = await fetch("https://play.limitlesstcg.com" + archMatch[1] + `?game=DCG&format=standard&set=${currentFormat}`);
+        const archHtml = await archRes.text();
+        const declistLinkMatch = archHtml.match(/\/tournament\/[a-f0-9]+\/player\/[^"']+\/decklist/);
+        if (declistLinkMatch) {
+          const declistRes = await fetch("https://play.limitlesstcg.com" + declistLinkMatch[0]);
+          const declistHtml = await declistRes.text();
+          if (!declistHtml.includes("const decklist = `")) {
+            failures.push("Limitless: parser de decklist quebrou — string mágica ausente");
+          }
+        }
+      }
+      
+      return { ok: failures.length === 0, failures };
+    }
+    
+    async import(): Promise<PipelineRun> {
+      const game = await getGame("digimon");
+      const currentFormat = game.config.current_format ?? "BT21";
+      const evSource = game.config.evidence_sources.find(s => s.id === "limitless-tcg");
+      const minSample = evSource?.min_sample_size ?? 100;
+      const aliases = game.config.archetype_aliases;
+      
+      // 1. Lista arquetipos do recorte
+      const archetypes = await fetchArchetypeList(currentFormat);
+      
+      let itemsImported = 0;
+      const archetypesUpdated: string[] = [];
+      const warnings: string[] = [];
+      
+      // 2. Pra cada arquetipo qualificado (sample >= min)
+      for (const arch of archetypes) {
+        const sampleSize = arch.wins + arch.losses + arch.ties;
+        if (sampleSize < minSample) continue;
+        
+        const archetypeId = mapDeckNameToArchetypeId(arch.name, aliases);
+        if (!archetypeId) {
+          warnings.push(`Arquetipo "${arch.name}" não mapeado — adicionar alias`);
+          continue;
+        }
+        
+        // 3. Coleta matchups
+        const matchups = await fetchMatchups(arch.slug, currentFormat);
+        const goodMatchups = matchups.filter(m => m.win_rate_pct >= 50).map(m => ({ vs: m.vs, win_rate_pct: m.win_rate_pct }));
+        const badMatchups = matchups.filter(m => m.win_rate_pct < 50).map(m => ({ vs: m.vs, win_rate_pct: m.win_rate_pct }));
+        
+        // 4. Top decklist
+        const exampleDecklist = await fetchTopDecklist(arch.slug, currentFormat).catch(() => null);
+        
+        // 5. UPSERT evidência
+        await upsertEvidence({
+          gameId: "digimon",
+          archetypeId,
+          sourceId: "limitless-tcg",
+          eventLabel: `Limitless agregado ${currentFormat} ${formatWeek(new Date())}`,
+          eventDate: new Date(),
+          url: `https://play.limitlesstcg.com/decks/${arch.slug}?game=DCG&format=standard&set=${currentFormat}`,
+          data: {
+            sample_size: sampleSize,
+            win_rate: arch.win_rate_pct,
+            share_pct: arch.share_pct,
+            record: `${arch.wins}-${arch.losses}-${arch.ties}`,
+            good_matchups: goodMatchups,
+            bad_matchups: badMatchups,
+            example_decklist: exampleDecklist,
+          },
+          verified: false, // limitless não é auto_verified
+        });
+        
+        itemsImported++;
+        archetypesUpdated.push(archetypeId);
+      }
+      
+      return { itemsImported, archetypesUpdated, warnings };
+    }
+  }
+
+═══ PARTE 2: Helpers de scraping ═══
+
+lib/evidence/pipelines/limitless/scraper.ts com funções:
+
+- fetchArchetypeList(format): parse HTML da listagem, retorna
+  [{ name, slug, decks_count, share_pct, wins, losses, ties, win_rate_pct }]
+- fetchMatchups(slug, format): parse /decks/{slug}/matchups
+- fetchTopDecklist(slug, format): pega 1ª decklist da lista, fetch decklist
+  individual, parseia o `const decklist = `` block, retorna 
+  { source: playerName, main: [...], egg: [...] }
+
+Use AbortSignal.timeout(10000) em todos os fetches. Trate erros de
+formato silenciosamente (warning, não falha tudo).
+
+═══ PARTE 3: Helper formatWeek ═══
+
+lib/evidence/utils.ts:
+
+  export function formatWeek(d: Date): string {
+    const year = d.getUTCFullYear();
+    const week = getISOWeek(d);  // 01-53
+    return `${year}-W${week.toString().padStart(2, "0")}`;
+  }
+
+═══ PARTE 4: Registra pipeline ═══
+
+Atualiza app/api/cron/evidences/route.ts pra incluir Limitless:
+
+  const pipelines = [
+    ...bandaiPipelines,
+    new LimitlessPipeline(),
+  ];
+
+═══ Aceitação ═══
+
+1. pnpm typecheck passa
+2. POST /api/cron/evidences/test/limitless-tcg processa todos os arquetipos
+   do BT21 atual sem erro
+3. Confirma no banco:
+   SELECT archetype_id, data->>'sample_size', data->>'win_rate'
+   FROM meta_archetype_evidences
+   WHERE source_id = 'limitless-tcg'
+   ORDER BY (data->>'sample_size')::int DESC LIMIT 10;
+4. Re-roda — confirma UPSERT (não duplica)
+5. Arquetipos com sample < 100 são SKIPPED (não criam evidência)
+6. Warnings de "arquetipo não mapeado" aparecem na resposta da API
