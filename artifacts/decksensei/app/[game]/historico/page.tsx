@@ -13,12 +13,13 @@ import {
   sql,
 } from "@workspace/db";
 import HistoricoList from "./HistoricoList";
-import { encodeCursor, GRADE_REGEX } from "@/app/api/analyses/history/route";
+import {
+  encodeCursor,
+  GRADE_REGEX,
+  PAGE_SIZE,
+  VALID_GRADES,
+} from "@/lib/history-helpers";
 import type { DeckGrade } from "@/lib/deck-score";
-
-const PAGE_SIZE = 20;
-
-const VALID_GRADES = new Set<string>(["A", "B", "C", "D"]);
 
 interface PageParams {
   params: Promise<{ game: string }>;

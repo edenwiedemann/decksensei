@@ -60,6 +60,7 @@ export default function HistoricoList({
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [activeGrade, setActiveGrade] = useState<DeckGrade | null>(initialGrade);
   const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [loadingMore, startLoadMore] = useTransition();
   const [switching, startSwitch] = useTransition();
 
@@ -76,6 +77,7 @@ export default function HistoricoList({
   );
 
   function handleGradeChange(grade: DeckGrade | null) {
+    setError(null);
     startSwitch(async () => {
       try {
         const data = await fetchPage(grade, null);
@@ -92,20 +94,21 @@ export default function HistoricoList({
         }
         router.replace(`?${next.toString()}`, { scroll: false });
       } catch {
-        // Falha silenciosa — mantém estado atual
+        setError("Não foi possível filtrar. Tente novamente.");
       }
     });
   }
 
   function handleLoadMore() {
     if (!nextCursor) return;
+    setError(null);
     startLoadMore(async () => {
       try {
         const data = await fetchPage(activeGrade, nextCursor);
         setItems((prev) => [...prev, ...data.items]);
         setNextCursor(data.nextCursor);
       } catch {
-        // Falha silenciosa
+        setError("Não foi possível carregar mais análises. Tente novamente.");
       }
     });
   }
@@ -125,6 +128,13 @@ export default function HistoricoList({
 
   return (
     <>
+      {/* Mensagem de erro inline */}
+      {error && (
+        <div className="mb-4 rounded-lg border border-rose-400/30 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-400">
+          {error}
+        </div>
+      )}
+
       {/* Barra de busca */}
       <div className="mb-4">
         <input
