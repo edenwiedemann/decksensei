@@ -1,0 +1,207 @@
+Refactor estrutural: mover toda especificidade de jogo do código pro JSONB
+games.config. Objetivo: cadastrar jogo novo (Lorcana, One Piece, SWU, etc)
+deve ser preenchimento de formulário no /admin/games/new — SEM precisar
+escrever ou implantar código.
+
+Arquitetura nova:
+
+═══ PARTE 1: Schema de games.config expandido ═══
+
+A coluna games.config (jsonb) passa a conter três blocos:
+
+interface GameConfig {
+  // existentes (mantém)
+  card_code_pattern: string;
+  card_code_examples: string[];
+  card_data_source: { name: string; license_notes_pt: string };
+  
+  // novos
+  parser: {
+    line_pattern: string;     // regex com captura groups
+    groups: { quantity: number; code: number; name?: number };
+    section_markers: Record<string, string[]>;  // ex { egg: ["egg deck", ...] }
+    comment_prefixes: string[];                 // ex ["#", "//"]
+  };
+  
+  card_api: {
+    url_template: string;     // ex "https://api.com/card/{code}"
+    search_url_template?: string;
+    response_path: string;    // JSONPath; "$" = root, "$[0]" = primeiro elem
+    field_mapping: Record<string, string>;  // alvo: jsonpath origem
+    image_url_template?: string;            // template usando campos mapeados
+    rate_limit: { max: number; window_sec: number };
+    headers?: Record<string, string>;
+    timeout_ms?: number;
+  };
+  
+  validator: {
+    main_deck_size: { min: number; max: number };
+    aux_decks: Record<string, { min: number; max: number }>;
+    max_copies_per_card: number;
+    color_warning_threshold?: number;
+  };
+}
+
+═══ PARTE 2: Adapters genéricos em lib/games/generic/ ═══
+
+Cria três classes que recebem o sub-config no construtor e implementam as
+interfaces existentes (DeckParser, CardAPI, DeckValidator):
+
+- lib/games/generic/parser.ts — GenericDeckParser
+  Usa parser_config.line_pattern + groups pra extrair {quantity, code, name}.
+  Reconhece section_markers pra montar auxDecks (case-insensitive).
+  Pula linhas com comment_prefixes.
+
+- lib/games/generic/card-api.ts — GenericCardAPI
+  Usa SerialRateLimiter (que já existe em digimon/card-api.ts — move pra
+  lib/games/generic/rate-limiter.ts).
+  Constrói URL com {code} substituído. Faz fetch. Aplica response_path.
+  Mapeia campos via field_mapping (use lib jsonpath-plus ou implementação
+  simples pra dot-notation).
+  Cache em memória por gameId+code (não global — chave inclui gameId).
+
+- lib/games/generic/validator.ts — GenericDeckValidator
+  Aplica main_deck_size, aux_decks, max_copies_per_card. Mensagens em PT-BR
+  parametrizadas pelos números do config (não hardcoded "50 cartas" — usa
+  o número do main_deck_size.max).
+
+═══ PARTE 3: lib/games/index.ts — dispatch via DB ═══
+
+Reescreve getParser, getCardAPI, getValidator pra:
+1. Buscar game no banco (com cache 60s tipo o que já existe em
+   analysis-prompt.ts).
+2. Instanciar a Generic* class com game.config.parser/card_api/validator.
+
+REMOVE pasta lib/games/digimon/ inteira após confirmar que tudo funciona
+com adapters genéricos lendo de games.config.
+
+A constante SUPPORTED_GAMES e o switch/case desaparecem. Qualquer game_id
+que existe no banco é "supported" automaticamente.
+
+═══ PARTE 4: Migrar config do Digimon pro novo formato ═══
+
+Atualiza lib/data/meta-archetypes.json (e o seed.ts) pra incluir os blocos
+parser, card_api, validator no game.config:
+
+{
+  "game": {
+    "id": "digimon",
+    "name": "Digimon Card Game",
+    "card_code_pattern": "^(BT|EX|ST|P|LM|RB)\\d+-\\d+$",
+    "card_code_examples": ["BT13-007", "EX8-009", "ST20-11", "P-040", "LM-029"],
+    "card_data_source": { ... },
+    "parser": {
+      "line_pattern": "^\\s*(\\d+)\\s*x?\\s+([A-Z]+\\d+-\\d+)(?:\\s+(.+?))?\\s*$",
+      "groups": { "quantity": 1, "code": 2, "name": 3 },
+      "section_markers": { "egg": ["egg deck", "digi-egg deck", "ovos"] },
+      "comment_prefixes": ["#", "//"]
+    },
+    "card_api": {
+      "url_template": "https://digimoncard.io/api-public/search?card={code}",
+      "search_url_template": "https://digimoncard.io/api-public/search?name={query}",
+      "response_path": "$[0]",
+      "field_mapping": {
+        "code": "id", "name": "name", "color": "color", "type": "type",
+        "level": "level", "cost": "play_cost", "dp": "dp",
+        "attribute": "attribute", "mainEffect": "main_effect",
+        "inheritedEffect": "source_effect", "imageUrl": "pretty_url"
+      },
+      "image_url_template": "https://digimoncard.io/images/cards/{imageUrl}.jpg",
+      "rate_limit": { "max": 15, "window_sec": 10 },
+      "headers": { "Accept": "application/json" }
+    },
+    "validator": {
+      "main_deck_size": { "min": 50, "max": 50 },
+      "aux_decks": { "egg": { "min": 0, "max": 5 } },
+      "max_copies_per_card": 4
+    }
+  },
+  ... (resto inalterado)
+}
+
+Roda seed novamente (com cuidado pra não duplicar) ou cria migration que
+faz UPDATE games SET config = jsonb_set(...) pro digimon ganhar os blocos
+novos.
+
+═══ PARTE 5: /admin/games CRUD com formulário visual ═══
+
+(Aproveita boa parte do que já tinha proposto antes pra "gestão de jogos",
+mas agora SEM o aviso "precisa de adapter no código" — porque não precisa
+mais.)
+
+Páginas:
+- /admin/games — lista jogos cadastrados (id, name, contadores de prompt/
+  snapshot/análises, status ativo).
+- /admin/games/new — formulário de cadastro estruturado por seções:
+
+  SEÇÃO 1 — Identidade
+  - id (slug, validação inline)
+  - nome (texto)
+  - notas (textarea, opcional — explicação do jogo, links úteis)
+
+  SEÇÃO 2 — Decklist (Parser)
+  - Padrão de linha (regex, com testador inline: campo "linha de exemplo"
+    que mostra ✓ ou ✗ se o regex casa)
+  - Grupos de captura (3 inputs number: posição da quantidade, do código,
+    do nome opcional)
+  - Marcadores de seção (cada seção tem nome interno + lista de marcadores
+    aceitos. UI: botão "+ adicionar deck auxiliar" que cria { nome interno,
+    marcadores aceitos })
+  - Prefixos de comentário (chips)
+
+  SEÇÃO 3 — Card API
+  - URL template (campo + helper "use {code} onde a API espera o código da
+    carta")
+  - Search URL template (opcional — pra autocomplete por nome)
+  - Response path (helper: "$" pra raiz, "$[0]" pra primeiro elem do array,
+    "$.data" pra campo aninhado)
+  - Mapeamento de campos: lista de pares "alvo: caminho na resposta"
+    (alvos pré-definidos: code, name, color, type, level, cost, dp,
+    attribute, mainEffect, inheritedEffect, imageUrl)
+  - Image URL template (opcional)
+  - Rate limit (max requests + window seconds)
+  - Headers customizados (key/value pairs)
+
+  SEÇÃO 4 — Regras de validação
+  - Main deck: min e max
+  - Decks auxiliares (cada um: nome, min, max)
+  - Cópias máximas por carta
+  - Cores diferentes pra warning (opcional)
+
+  Botão "Testar config" (antes de salvar) — chama endpoint que:
+  1. Tenta parsear uma decklist de exemplo (campo textarea no form)
+  2. Tenta buscar uma carta de exemplo (campo input no form)
+  3. Mostra resultado: parsed deck, carta enriquecida, ou erros claros
+
+  Só permite salvar se o teste passou (ou se o admin clicou "salvar mesmo
+  assim com warnings").
+
+- /admin/games/[id]/edit — mesma UI, com valores pré-preenchidos.
+
+═══ PARTE 6: Remove SUPPORTED_GAMES e referências hardcoded ═══
+
+Já que dispatch é via DB, remove qualquer constante SUPPORTED_GAMES e
+qualquer if (gameId === "digimon") que sobrar. O sistema é totalmente
+dirigido por dados.
+
+═══ Aceitação ═══
+
+1. Apaga lib/games/digimon/ inteira.
+2. Roda pnpm typecheck, pnpm dev. Confirma que análise de Digimon ainda
+   funciona (parser, validator, card-api genéricos lendo do DB).
+3. Faz cadastro de jogo fake "lorcana-test" via /admin/games/new com config
+   apontando pra API qualquer (pode ser scryfall por enquanto). Confirma
+   que o formulário valida e salva.
+4. Cola decklist de teste em /lorcana-test — confirma que parser genérico
+   processa, card API genérico busca cartas. Não precisa de NENHUMA mudança
+   de código.
+5. Apaga lorcana-test depois.
+
+═══ NOTA IMPORTANTE ═══
+
+Esse refactor é grande (vai mexer em ~10 arquivos, criar ~6 arquivos novos,
+deletar ~4). Faz em uma sessão dedicada com commit no início e checkpoints
+intermediários. Se algum passo quebrar, rollback fácil.
+
+Antes de começar: lista todos os arquivos que vai criar, modificar e
+deletar pra eu confirmar.
