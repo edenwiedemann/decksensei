@@ -166,10 +166,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 1. Auth gate ────────────────────────────────────────────────────────
+    // ── 1. Auth gate (DB-backed por IP — resistente a limpeza de cookie) ───
     if (!isAuthenticated) {
-      const count = parseInt(cookieStore.get("analyses_count")?.value ?? "0", 10);
-      if (count >= 1) {
+      let firstAllowed = true;
+      try {
+        // Janela de 365 dias = efetivamente permanente por IP
+        const anonLimit = await checkRateLimit(
+          `anon_first:${ip}`,
+          365 * 24 * 3600,
+          1,
+        );
+        firstAllowed = anonLimit.allowed;
+      } catch (err) {
+        // DB indisponível — fallback para cookie para não bloquear ninguém
+        console.error("[analyze] anon DB limit falhou, fallback p/ cookie:", err);
+        const count = parseInt(
+          cookieStore.get("analyses_count")?.value ?? "0",
+          10,
+        );
+        firstAllowed = count < 1;
+      }
+
+      if (!firstAllowed) {
         return Response.json(
           {
             error: "auth_required",

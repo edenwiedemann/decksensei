@@ -1,0 +1,17 @@
+4 BT21-001 Agumon (2006)
+4 BT21-002 Greymon (2006)
+4 BT21-003 MetalGreymon (2006)
+4 BT21-004 WarGreymon (2006)
+4 BT21-009 ShineGreymon
+3 BT21-010 ShineGreymon Burst Mode
+3 BT20-007 Agumon -Yuki no Kizuna-
+3 BT13-009 Agumon (Digimon Adventure:)
+2 BT21-106 Taichi Yagami
+4 BT21-107 Sora Takenouchi & Yamato Ishida
+3 BT16-089 Taichi Yagami & Yamato Ishida
+4 BT21-097 Booster Capsule (Orange)
+4 BT13-093 Taichi Yagami & Agumon
+
+Egg deck:
+4 BT21-005 Koromon
+4 BT21-006 Botamon

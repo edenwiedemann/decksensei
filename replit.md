@@ -14,7 +14,8 @@ Projeto pai-e-filho: pai cuida da parte técnica, filho (jogador competitivo de 
 - **Estilo:** Tailwind CSS v4 + shadcn/ui
 - **Banco:** PostgreSQL (Replit) + Drizzle ORM
 - **IA:** Anthropic SDK (`@anthropic-ai/sdk`) — motor de análise via streaming
-- **Email:** Resend — magic link login
+- **Email:** Resend — magic link login + envio de análise
+- **Analytics:** posthog-js (`NEXT_PUBLIC_POSTHOG_KEY`) — tracking de fallbacks/erros de formato
 - **Monorepo:** pnpm workspaces
 
 ## Estrutura de pastas (artifact: decksensei)
@@ -119,10 +120,12 @@ Ver `.env.example`. Configuradas no Replit:
 
 - `/` → redirect 307 para `/digimon`
 - `/digimon` → landing + formulário de decklist
-- `/digimon/a/[id]` → análise compartilhada
+- `/digimon/a/[id]` → análise compartilhada (OG tags completas)
+- `/digimon/historico` → histórico de análises do usuário logado
 - `/obrigado` → pós-captura de email
 - `/admin/*` → painel admin protegido
 - `POST /api/analyze` → análise de deck (streaming Anthropic)
+- `POST /api/analysis/[id]/email` → envia análise por email via Resend
 - `GET /api/health` → health check com status do banco e chaves
 
 ## Paleta de cores (globals.css)
@@ -160,11 +163,18 @@ A config chega como prop do server component `[game]/page.tsx` → `DeckInput` (
 
 ## Mudanças recentes
 
+- **9 melhorias implementadas de uma vez:**
+  - **T001 localStorage:** análise salva em `ds_analysis_{gameId}` (24h); restaura automaticamente no mount
+  - **T002 Email via Resend:** botão "Enviar por email" pós-análise → form inline → `POST /api/analysis/[id]/email`; rate-limit 1/hora por (id+email); template HTML escuro
+  - **T003 Anon limit por IP no DB:** substituiu cookie-check por `checkRateLimit('anon_first:{ip}', 365d, 1)`; resistente a limpeza de cookie; fallback para cookie se DB falhar
+  - **T004 PostHog:** `posthog-js` instalado; `lib/posthog-client.ts` + `PostHogInit` no layout; `trackEvent("analysis_format_fallback")` e `trackEvent("suggestions_json_error")` nos pontos de falha; ativa com `NEXT_PUBLIC_POSTHOG_KEY`
+  - **T005 Error boundary:** `AnalysisErrorBoundary` (class component) envolve `AnalysisResult`; fallback mostra markdown puro sem quebrar a página
+  - **T006 OG tags:** já existia — `generateMetadata` completo em `/[game]/a/[id]/page.tsx`
+  - **T007 Concurrency limit:** worker pool de 5 workers máx no enrichment (antes ilimitado); evita burst de conexões em decks grandes
+  - **T008 Histórico:** `/[game]/historico` — server component; lista 20 últimas análises do usuário logado com excerpt + data + link
+  - **T009 Script de regressão:** `scripts/validate-analyses.ts` — valida formato dos headers e JSON de sugestões nas análises recentes do DB; `scripts/fixtures/digimon-bt21.txt` — deck de fixture
 - **Refactor estrutural TCG-agnóstico:** deletada `lib/games/digimon/`, criados adapters genéricos, CRUD `/admin/games`
 - Middleware: `/api/admin/login` excluído da proteção (antes bloqueava login)
-- `app/api/admin/analyses/recent/route.ts`: removido JOIN em `meta_archetypes` (tabela inexistente)
-- `env.ts`: banner de erro renomeado de "TopdeckCoach" para "Deck Sensei"
-- `app/layout.tsx`: adicionado `icons.icon` para favicon.svg (resolve 404 de favicon.ico)
 - Cache da featured analysis via `unstable_cache` (revalidate: 300s, tag `featured-analysis`)
 
 > Histórico completo em `CHANGELOG.md` na raiz do repositório.

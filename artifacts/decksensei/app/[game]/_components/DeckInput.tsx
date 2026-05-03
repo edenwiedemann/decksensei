@@ -115,6 +115,41 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Restaura última análise do localStorage (válida por 24h) ─────────────
+  useEffect(() => {
+    if (autoResume) return; // auto-resume vai restaurar o estado via deck salvo
+    try {
+      const cacheKey = `ds_analysis_${gameConfig.id}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (!cached) return;
+      const parsed = JSON.parse(cached) as {
+        text?: string;
+        analysisId?: string;
+        colorMap?: Record<string, string>;
+        enrichmentPct?: number | null;
+        savedAt?: number;
+      };
+      const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+      if (!parsed.savedAt || Date.now() - parsed.savedAt > MAX_AGE_MS) {
+        localStorage.removeItem(cacheKey);
+        return;
+      }
+      if (parsed.text) {
+        setAnalysis({
+          ...IDLE,
+          phase: "done",
+          text: parsed.text,
+          analysisId: parsed.analysisId ?? "",
+          colorMap: parsed.colorMap ?? {},
+          enrichmentPct: parsed.enrichmentPct ?? null,
+        });
+      }
+    } catch {
+      // localStorage indisponível ou JSON inválido — ignora
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Countdown de rate limit ───────────────────────────────────────────────
   useEffect(() => {
     if (analysis.retryAfterSec <= 0) {
@@ -180,7 +215,8 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     setAnalysis(IDLE);
-  }, []);
+    try { localStorage.removeItem(`ds_analysis_${gameConfig.id}`); } catch {}
+  }, [gameConfig.id]);
 
   const handleDeckChange = useCallback(
     (value: string) => {
@@ -196,6 +232,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
     if (!parsed || !isReady) return;
 
     abortRef.current?.abort();
+    try { localStorage.removeItem(`ds_analysis_${gameConfig.id}`); } catch {}
     const abort = new AbortController();
     abortRef.current = abort;
 
@@ -241,19 +278,28 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         enrichProgress: { done: 0, total: enrichTotal },
       });
 
-      await Promise.all(
-        uniqueCards.map(async (card) => {
-          const data = await cardApi.fetchCard(card.cardCode);
-          enrichedMap.set(card.cardCode, data);
-          enrichDone += 1;
-          const snapshot = enrichDone;
-          setAnalysis((prev) => ({
-            ...prev,
-            phase: "enriching" as const,
-            enrichProgress: { done: snapshot, total: enrichTotal },
-          }));
-        }),
+      // Pool com no máximo 5 requisições simultâneas para evitar burst
+      const ENRICH_CONCURRENCY = 5;
+      const queue = [...uniqueCards];
+      const workers = Array.from(
+        { length: Math.min(ENRICH_CONCURRENCY, enrichTotal) },
+        async () => {
+          while (true) {
+            const card = queue.shift();
+            if (!card) break;
+            const data = await cardApi.fetchCard(card.cardCode);
+            enrichedMap.set(card.cardCode, data);
+            enrichDone += 1;
+            const snapshot = enrichDone;
+            setAnalysis((prev) => ({
+              ...prev,
+              phase: "enriching" as const,
+              enrichProgress: { done: snapshot, total: enrichTotal },
+            }));
+          }
+        },
       );
+      await Promise.all(workers);
 
       if (abort.signal.aborted) return;
 
@@ -370,6 +416,13 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       }
 
       setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct });
+      // Persiste no localStorage para restaurar ao recarregar a página (24h)
+      try {
+        localStorage.setItem(
+          `ds_analysis_${gameConfig.id}`,
+          JSON.stringify({ text: fullText, analysisId, colorMap, enrichmentPct, savedAt: Date.now() }),
+        );
+      } catch { /* localStorage indisponível */ }
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       console.error("[analyze]", err);

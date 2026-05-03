@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { ArrowRight, X } from "lucide-react";
+import { trackEvent } from "@/lib/posthog-client";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export function parseSuggestionsBlock(
         "considerar ajuste no prompt para formato mais estrito.",
       { raw, err },
     );
+    trackEvent("suggestions_json_error", { raw: raw.slice(0, 300), error: String(err) });
     return { ok: false, raw };
   }
 }

@@ -16,6 +16,7 @@ import {
 import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
 import type { SuggestionsParseResult } from "./SuggestionsCard";
 import FeedbackBlock from "./FeedbackBlock";
+import { trackEvent } from "@/lib/posthog-client";
 
 // ─── Configuração das seções ──────────────────────────────────────────────────
 
@@ -464,6 +465,7 @@ export default function AnalysisResult({ text, streaming, colorMap, analysisId }
         "[AnalysisResult] Formato inesperado — headers ausentes. Considerar prompt mais estrito.",
         { missing },
       );
+      trackEvent("analysis_format_fallback", { missing, analysisId });
       return <FallbackProse text={text} analysisId={analysisId} />;
     }
   }

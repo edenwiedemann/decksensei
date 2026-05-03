@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Share2, Check } from "lucide-react";
+import { Share2, Check, Mail } from "lucide-react";
 import AnalysisResult from "./AnalysisResult";
+import AnalysisErrorBoundary from "./AnalysisErrorBoundary";
 
 interface AnalysisStreamProps {
   text: string;
@@ -90,17 +91,19 @@ export default function AnalysisStream({
 
       {/* Fase 3 — texto streamando / concluído */}
       {hasText && (
-        <AnalysisResult
-          text={text}
-          streaming={phase === "streaming"}
-          colorMap={colorMap}
-          analysisId={analysisId || undefined}
-        />
+        <AnalysisErrorBoundary fallbackText={text}>
+          <AnalysisResult
+            text={text}
+            streaming={phase === "streaming"}
+            colorMap={colorMap}
+            analysisId={analysisId || undefined}
+          />
+        </AnalysisErrorBoundary>
       )}
 
       {/* Ações pós-análise */}
       {phase === "done" && hasText && (
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-wrap items-center gap-3 pt-2">
           <Button variant="outline" size="sm" onClick={onReset}>
             Nova análise
           </Button>
@@ -129,9 +132,106 @@ export default function AnalysisStream({
               )}
             </Button>
           )}
+
+          {analysisId && <EmailForm analysisId={analysisId} />}
         </div>
       )}
     </div>
+  );
+}
+
+// ─── EmailForm ────────────────────────────────────────────────────────────────
+
+type EmailPhase = "idle" | "input" | "sending" | "sent" | "error";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function EmailForm({ analysisId }: { analysisId: string }) {
+  const [phase, setPhase] = useState<EmailPhase>("idle");
+  const [email, setEmail] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setPhase("sending");
+    try {
+      const res = await fetch(`/api/analysis/${analysisId}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setErrorMsg(data.error ?? "Erro ao enviar. Tenta de novo.");
+        setPhase("error");
+        setTimeout(() => setPhase("input"), 3500);
+        return;
+      }
+      setPhase("sent");
+      setTimeout(() => {
+        setPhase("idle");
+        setEmail("");
+      }, 4000);
+    } catch {
+      setErrorMsg("Sem conexão. Tenta de novo.");
+      setPhase("error");
+      setTimeout(() => setPhase("input"), 3500);
+    }
+  }
+
+  if (phase === "sent") {
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-emerald-400">
+        <Check className="h-3.5 w-3.5" />
+        Enviado!
+      </span>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <span className="text-xs text-destructive/80">{errorMsg}</span>
+    );
+  }
+
+  if (phase === "idle") {
+    return (
+      <Button variant="outline" size="sm" onClick={() => setPhase("input")}>
+        <Mail className="mr-1.5 h-3.5 w-3.5" />
+        Enviar por email
+      </Button>
+    );
+  }
+
+  // "input" | "sending"
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="seu@email.com"
+        disabled={phase === "sending"}
+        autoFocus
+        className="h-8 rounded-md border border-border/50 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50"
+      />
+      <Button
+        size="sm"
+        type="submit"
+        disabled={phase === "sending" || !EMAIL_RE.test(email)}
+      >
+        {phase === "sending" ? "Enviando..." : "Enviar"}
+      </Button>
+      <button
+        type="button"
+        onClick={() => setPhase("idle")}
+        disabled={phase === "sending"}
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+      >
+        Cancelar
+      </button>
+    </form>
   );
 }
 

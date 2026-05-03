@@ -21,6 +21,7 @@
     "lucide-react": "catalog:",
     "nanoid": "^5.1.5",
     "next": "^15.3.0",
+    "posthog-js": "^1.372.6",
     "radix-ui": "^1.4.3",
     "react": "catalog:",
     "react-dom": "catalog:",
