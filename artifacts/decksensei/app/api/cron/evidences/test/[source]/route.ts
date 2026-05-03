@@ -20,14 +20,18 @@ import { BandaiWorldsFinalPipeline } from "@/lib/evidence/pipelines/bandai/world
 import { BandaiRegionalsPipeline } from "@/lib/evidence/pipelines/bandai/regionals";
 import { BandaiUltimateCupPipeline } from "@/lib/evidence/pipelines/bandai/ultimate-cup";
 import { BandaiStoreChampionshipPipeline } from "@/lib/evidence/pipelines/bandai/store-championship";
+import { DigimonMetaPipeline } from "@/lib/evidence/pipelines/digimonmeta/index";
 import { LimitlessPipeline } from "@/lib/evidence/pipelines/limitless/index";
+import { DigimonCardIoPipeline } from "@/lib/evidence/pipelines/digimoncard-io/index";
 
 const ALL_PIPELINES: EvidencePipeline[] = [
   new BandaiWorldsFinalPipeline(),
   new BandaiRegionalsPipeline(),
   new BandaiUltimateCupPipeline(),
   new BandaiStoreChampionshipPipeline(),
+  new DigimonMetaPipeline(),
   new LimitlessPipeline(),
+  new DigimonCardIoPipeline(),
 ];
 
 const PIPELINE_REGISTRY = new Map<string, EvidencePipeline>(

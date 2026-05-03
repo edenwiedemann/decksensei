@@ -1,0 +1,159 @@
+Implementa painéis admin pra gerenciar pipelines + evidências + curadoria.
+Estrutura conforme pipelines-evidencias.md "Painéis admin novos".
+
+═══ PARTE 1: /admin/pipelines (lista de pipelines) ═══
+
+app/admin/pipelines/page.tsx (server component, admin protected):
+
+Tabela com:
+- Source ID + label
+- Peso
+- Status atual (ok/broken/import_error/paused) — pega da última row em
+  pipeline_health
+- Último run (data)
+- Itens importados último run
+- Próximo run agendado (sempre próxima segunda 03:00 BRT)
+- Ações: "Ver histórico", "Rodar agora" (admin trigger), "Pausar/Ativar"
+
+Banner amarelo no topo se alguma pipeline está "broken" — link direto pra ela.
+
+═══ PARTE 2: /admin/pipelines/[sourceId] (detalhe + histórico) ═══
+
+app/admin/pipelines/[sourceId]/page.tsx:
+
+- Header com sourceId, label, weight
+- Histórico (últimos 30 runs): timestamp, status, itens importados,
+  failures/error message expandable
+- Box "Fingerprint atual" (se broken: mostra failures detalhadas)
+- Botão "Rodar agora" → POST /api/cron/evidences/test/[sourceId]
+- Botão "Pausar pipeline" (toggle): adiciona row em pipeline_health com
+  status="paused" — orchestrator (runner.ts) pula sources pausadas
+  (modificar runPipeline pra checar)
+
+═══ PARTE 3: /admin/evidences (fila de curadoria) ═══
+
+app/admin/evidences/page.tsx (admin protected):
+
+Lista evidências NÃO verificadas (verified=false), ordenadas por
+"relevância" calculada:
+  relevance = source.weight * recency_factor * sample_adequacy
+
+Default mostra só as TOP 50 mais relevantes não-verificadas.
+
+Filtros (query params):
+- ?source={sourceId} — filtra por fonte
+- ?archetype={archetypeId} — filtra por arquetipo
+- ?game={gameId} — filtra por jogo (default = primeiro do banco)
+
+Cada linha: archetype + label + source + sample + WR + idade + botões
+"Verificar" / "Rejeitar" / "Ver evento" (link pra URL).
+
+Click "Verificar" abre modal com campos:
+- Confirma URL (pré-preenchido)
+- Verification note (textarea opcional)
+- Botão "Confirmar verificação"
+
+Submit chama POST /api/admin/evidences/[id]/verify que faz UPDATE
+verified=true, verified_by=actor, verified_at=NOW(), verification_note.
+
+Click "Rejeitar" abre modal pedindo motivo, faz DELETE da evidência (não
+soft delete — evidência rejeitada some pra não confundir).
+
+═══ PARTE 4: /admin/archetypes/[id] aba "Evidências" ═══
+
+Em /admin/meta/[id]/archetype/[archIdx]/edit/page.tsx, adiciona bloco
+no fim da página: "Evidências externas":
+
+- Lista todas as evidências do arquetipo (todas as fontes), ordenadas
+  por event_date DESC
+- Cada uma: source label (com badge colorido por peso), event_label,
+  data, sample, WR, badge "verified" verde ou "pending" amarelo
+- No topo: card grande com SCORE DE CONFIANÇA calculado (usando
+  computeArchetypeConfidence de lib/evidence/score.ts) + breakdown:
+  - Score: 87/100
+  - WR ponderado: 54.5%
+  - Range: 53.9% — 58.3%
+  - Sample combinado: 658 partidas
+  - Fontes que sustentam: lista visual
+
+Botão "+ Adicionar evidência manual" abre form: source (dropdown),
+event label, data, URL, dados (sample, WR, share_pct), nota.
+
+═══ PARTE 5: Email semanal de resumo ═══
+
+Cria endpoint /api/cron/weekly-digest que roda DEPOIS do /api/cron/evidences:
+
+GitHub Action workflow ganha segundo step que roda 3min depois:
+
+  - name: Send weekly digest
+    if: success()
+    run: |
+      sleep 180
+      curl -X POST "${{ secrets.APP_URL }}/api/cron/weekly-digest" \
+        -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+Endpoint /api/cron/weekly-digest:
+1. Busca últimos runs de cada pipeline (últimas 24h)
+2. Conta evidências importadas, broken pipelines
+3. Conta evidências pendentes de verificação com relevância alta
+4. Envia email pro env.ADMIN_EMAIL com template usando emailShell de
+   lib/email-templates.ts
+5. Subject: "[Deck Sensei] Resumo semanal — {data}"
+6. Body: tabela de cada pipeline com status + contadores + lista de
+   pendências críticas
+
+═══ PARTE 6: Atualizar buildAnalysisPrompt pra usar evidências ═══
+
+Em lib/analysis-prompt.ts, no formato de archetypes_context, adiciona pra
+cada arquetipo o bloco de evidências:
+
+  for (const arch of archetypes) {
+    const confidence = await computeArchetypeConfidence("digimon", arch.id);
+    
+    lines.push(`=== ${arch.name_pt} ===`);
+    lines.push(`Confiança agregada: ${confidence.score}/100 (${confidence.score >= 70 ? "alta" : confidence.score >= 40 ? "média" : "baixa"})`);
+    if (confidence.weightedWinRate != null) {
+      lines.push(`Win rate ponderado: ${confidence.weightedWinRate.toFixed(1)}%`);
+      if (confidence.winRateRange) {
+        lines.push(`Range observado: ${confidence.winRateRange[0].toFixed(1)}% — ${confidence.winRateRange[1].toFixed(1)}%`);
+      }
+    }
+    lines.push(`Sample combinado: ${confidence.totalSampleSize} partidas`);
+    lines.push("Fontes que sustentam:");
+    for (const ev of confidence.evidences.slice(0, 5)) {
+      const verifiedTag = ev.verified ? " [verificado]" : "";
+      lines.push(`  - ${ev.event_label}${verifiedTag}: ${JSON.stringify(ev.data).slice(0, 100)}`);
+    }
+    lines.push("");
+    // ... resto do contexto (key_cards, matchups, etc)
+  }
+
+E no system prompt v3, adiciona instrução:
+
+> Cada arquetipo agora tem campo de confidence (0-100). Quando comparar deck
+> do user com arquetipo, declare explicitamente o nível:
+> - Confidence ≥ 70: "Esse arquetipo está bem documentado em torneios oficiais — leitura sólida."
+> - Confidence 40-69: "Esse arquetipo tem dados parciais — leitura provisória."
+> - Confidence < 40: "Pouca evidência sólida — trate qualquer comparação como exploratória, não definitiva."
+> 
+> Se win_rate_range for amplo (> 8 pontos), explique: "WR varia entre X% e Y% dependendo da fonte — provavelmente sensível ao formato do torneio ou meta da região."
+> 
+> Quando uma fonte é 'limitless-tcg' ou 'digimoncard-io' isolada, sempre 
+> mencione: "segundo agregador X, sample N, sem confirmação de torneio oficial."
+
+Cria o prompt como nova versão v3 (NÃO sobrescreve v2 ativa). Filho ativa
+manualmente via /admin/prompts.
+
+═══ Aceitação ═══
+
+1. pnpm typecheck passa
+2. /admin/pipelines lista as 7 pipelines com status (mesmo que pending
+   se nenhum run ainda)
+3. /admin/pipelines/bandai-worlds-final mostra histórico de runs
+4. /admin/evidences lista evidências unverified de Limitless/DigimonCard.io
+5. Click "Verificar" funciona, evidência some da fila
+6. /admin/meta/[snapId]/archetype/[idx]/edit mostra bloco "Evidências
+   externas" no fim
+7. POST /api/cron/weekly-digest envia email pro ADMIN_EMAIL
+8. Prompt v3 está no banco como versão NÃO ATIVA — filho ativa quando
+   testar
