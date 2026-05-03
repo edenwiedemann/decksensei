@@ -59,6 +59,13 @@ const VARIABLES = [
   },
 ];
 
+type AutocompleteState = {
+  open: boolean;
+  query: string;
+  position: { top: number; left: number };
+  selectedIdx: number;
+} | null;
+
 export default function PromptEditor({
   gameId,
   promptId,
@@ -81,23 +88,92 @@ export default function PromptEditor({
   const [activating, setActivating] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [activateError, setActivateError] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [autocomplete, setAutocomplete] = useState<AutocompleteState>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const insertVariable = useCallback((varKey: string) => {
-    const tag = `{{${varKey}}}`;
+  const completeVariable = useCallback((variable: (typeof VARIABLES)[number]) => {
     const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const newContent = content.slice(0, start) + tag + content.slice(end);
+    if (!ta || !autocomplete) return;
+    const cursorPos = ta.selectionStart;
+    const textBeforeCursor = content.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/\{\{([a-z_]*)$/);
+    if (!match) return;
+
+    const startOfTrigger = cursorPos - match[0].length;
+    const newContent =
+      content.slice(0, startOfTrigger) +
+      `{{${variable.key}}}` +
+      content.slice(cursorPos);
     setContent(newContent);
+    setAutocomplete(null);
+
     requestAnimationFrame(() => {
+      const newPos = startOfTrigger + variable.key.length + 4; // {{ + key + }}
       ta.focus();
-      const newPos = start + tag.length;
       ta.setSelectionRange(newPos, newPos);
     });
-  }, [content]);
+  }, [content, autocomplete]);
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setContent(value);
+
+    const cursorPos = e.target.selectionStart;
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/\{\{([a-z_]*)$/);
+
+    if (match) {
+      const query = match[1];
+      const filtered = VARIABLES.filter((v) => v.key.startsWith(query));
+      if (filtered.length > 0) {
+        const ta = e.target;
+        const rect = ta.getBoundingClientRect();
+        setAutocomplete({
+          open: true,
+          query,
+          position: { top: rect.bottom + 4, left: rect.left + 20 },
+          selectedIdx: 0,
+        });
+        return;
+      }
+    }
+    setAutocomplete(null);
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!autocomplete?.open) return;
+    const filtered = VARIABLES.filter((v) => v.key.startsWith(autocomplete.query));
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setAutocomplete({
+        ...autocomplete,
+        selectedIdx: Math.min(autocomplete.selectedIdx + 1, filtered.length - 1),
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setAutocomplete({
+        ...autocomplete,
+        selectedIdx: Math.max(autocomplete.selectedIdx - 1, 0),
+      });
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      if (filtered[autocomplete.selectedIdx]) {
+        e.preventDefault();
+        completeVariable(filtered[autocomplete.selectedIdx]);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setAutocomplete(null);
+    }
+  };
+
+  const handleCopyVariable = async (key: string) => {
+    await navigator.clipboard.writeText(`{{${key}}}`);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   const handleSave = useCallback(async () => {
     setSaveError("");
@@ -155,6 +231,10 @@ export default function PromptEditor({
     return acc.replaceAll(`{{${v.key}}}`, v.example);
   }, content);
 
+  const filteredForDropdown = autocomplete
+    ? VARIABLES.filter((v) => v.key.startsWith(autocomplete.query))
+    : [];
+
   return (
     <div className="flex flex-col gap-5">
       {/* ── Campos de cabeçalho ─────────────────────────────────── */}
@@ -195,11 +275,40 @@ export default function PromptEditor({
           <textarea
             ref={textareaRef}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Cole ou escreva o system prompt aqui. Use {{game_name}}, {{archetypes_context}} etc onde quiser que o sistema injete os valores em runtime."
+            onChange={handleTextareaChange}
+            onKeyDown={handleTextareaKeyDown}
+            onBlur={() => setTimeout(() => setAutocomplete(null), 150)}
+            placeholder="Cole ou escreva o system prompt aqui. Digite {{ para abrir o autocomplete de variáveis."
             className="h-[520px] w-full resize-none rounded-lg border border-border/40 bg-card/30 p-4 font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
             spellCheck={false}
           />
+
+          {/* Dropdown de autocomplete */}
+          {autocomplete?.open && filteredForDropdown.length > 0 && (
+            <div
+              className="fixed z-50 rounded-lg border border-border/40 bg-card shadow-xl overflow-hidden min-w-[260px]"
+              style={{ top: autocomplete.position.top, left: autocomplete.position.left }}
+            >
+              {filteredForDropdown.map((v, idx) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    completeVariable(v);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-primary/10 ${
+                    idx === autocomplete.selectedIdx ? "bg-primary/15" : ""
+                  }`}
+                >
+                  <div className="font-mono text-xs text-primary">{`{{${v.key}}}`}</div>
+                  <div className="text-[10px] text-muted-foreground/70">
+                    {v.label} · ex: {v.example}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Coluna direita: variáveis + preview ─ */}
@@ -214,40 +323,39 @@ export default function PromptEditor({
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Campos disponíveis
               </span>
-              <span className="text-xs text-muted-foreground/60 transition-transform duration-200"
-                style={{ transform: varOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <span
+                className="text-xs text-muted-foreground/60 transition-transform duration-200"
+                style={{ transform: varOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+              >
                 ▲
               </span>
             </button>
             {varOpen && (
               <div className="border-t border-border/30 px-4 pb-4 pt-3 space-y-2">
                 <p className="text-xs text-muted-foreground/60 leading-snug">
-                  Posicione o cursor no editor, depois clique <strong>inserir</strong>. A variável aparece
-                  exatamente onde estava o cursor. O sistema substitui pelo valor real antes de enviar ao coach.
+                  Digite <code className="rounded bg-card/60 px-1 font-mono text-primary">{"{{ "}</code> no
+                  editor para abrir o autocomplete. Ou clique em um campo abaixo para copiar e cole onde quiser.
+                  As variáveis viram valores reais quando o coach roda a análise.
                 </p>
                 <div className="space-y-1.5 mt-3">
                   {VARIABLES.map((v) => (
-                    <div
+                    <button
                       key={v.key}
-                      className="rounded-lg border border-border/30 bg-background/30 px-3 py-2"
+                      type="button"
+                      onClick={() => handleCopyVariable(v.key)}
+                      className="w-full rounded-lg border border-border/30 bg-background/30 px-3 py-2 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-foreground leading-snug">
-                          {v.label}
-                        </p>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => insertVariable(v.key)}
-                          className="shrink-0 rounded-md border border-border/40 bg-card/50 px-2 py-0.5 text-[10px] text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
-                        >
-                          inserir
-                        </button>
+                        <code className="rounded bg-card/60 px-1.5 py-0.5 font-mono text-xs text-primary">
+                          {`{{${v.key}}}`}
+                        </code>
+                        <span className="shrink-0 text-[10px] text-muted-foreground/40">
+                          {copiedKey === v.key ? "✓ copiado!" : "click pra copiar"}
+                        </span>
                       </div>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground/50 leading-snug">
-                        ex: {v.example}
-                      </p>
-                    </div>
+                      <p className="mt-1 text-xs font-medium text-foreground">{v.label}</p>
+                      <p className="text-[10px] text-muted-foreground/60">ex: {v.example}</p>
+                    </button>
                   ))}
                 </div>
               </div>

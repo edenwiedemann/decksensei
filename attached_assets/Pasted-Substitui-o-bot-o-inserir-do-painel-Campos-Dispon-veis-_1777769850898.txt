@@ -1,0 +1,192 @@
+Substitui o botão "inserir" do painel Campos Disponíveis por uma UX baseada
+em autocomplete dentro do editor. O design atual exige o admin posicionar
+cursor no editor ANTES de clicar inserir — UX frágil. Vamos para algo que
+todo editor moderno faz: trigger por digitação.
+
+Mudanças em artifacts/decksensei/app/admin/prompts/_components/PromptEditor.tsx:
+
+═══ PARTE 1: Autocomplete no editor com trigger {{ ═══
+
+1. Adiciona estado pra controlar o dropdown de autocomplete:
+
+   const [autocomplete, setAutocomplete] = useState<{
+     open: boolean;
+     query: string;
+     position: { top: number; left: number };
+     selectedIdx: number;
+   } | null>(null);
+
+2. Adiciona handler onChange/onKeyDown na textarea que detecta quando o
+   admin digita `{{` e abre o dropdown:
+
+   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+     const value = e.target.value;
+     setContent(value);
+     
+     // Detecta o último {{ antes do cursor
+     const cursorPos = e.target.selectionStart;
+     const textBeforeCursor = value.slice(0, cursorPos);
+     const match = textBeforeCursor.match(/\{\{([a-z_]*)$/);
+     
+     if (match) {
+       const query = match[1];
+       const filtered = VARIABLES.filter(v => v.key.startsWith(query));
+       if (filtered.length > 0) {
+         // Calcula posição do dropdown baseado no cursor
+         // Use getBoundingClientRect da textarea + offsetTop/Left aproximado
+         const ta = e.target;
+         const rect = ta.getBoundingClientRect();
+         // Aproximação simples: posiciona embaixo do textarea no início
+         // (UX aceitável, pode refinar depois com canvas measurement)
+         setAutocomplete({
+           open: true,
+           query,
+           position: { top: rect.bottom + 4, left: rect.left + 20 },
+           selectedIdx: 0,
+         });
+         return;
+       }
+     }
+     setAutocomplete(null);
+   };
+
+3. Adiciona handler onKeyDown pra navegação no dropdown (setas/enter/esc):
+
+   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+     if (!autocomplete?.open) return;
+     const filtered = VARIABLES.filter(v => v.key.startsWith(autocomplete.query));
+     
+     if (e.key === "ArrowDown") {
+       e.preventDefault();
+       setAutocomplete({
+         ...autocomplete,
+         selectedIdx: Math.min(autocomplete.selectedIdx + 1, filtered.length - 1),
+       });
+     } else if (e.key === "ArrowUp") {
+       e.preventDefault();
+       setAutocomplete({
+         ...autocomplete,
+         selectedIdx: Math.max(autocomplete.selectedIdx - 1, 0),
+       });
+     } else if (e.key === "Enter" || e.key === "Tab") {
+       e.preventDefault();
+       completeVariable(filtered[autocomplete.selectedIdx]);
+     } else if (e.key === "Escape") {
+       e.preventDefault();
+       setAutocomplete(null);
+     }
+   };
+
+4. Função que completa a variável (substitui o que tá depois do {{ pelo nome
+   completo + }}):
+
+   const completeVariable = (variable: typeof VARIABLES[number]) => {
+     const ta = textareaRef.current;
+     if (!ta || !autocomplete) return;
+     const cursorPos = ta.selectionStart;
+     const textBeforeCursor = content.slice(0, cursorPos);
+     const match = textBeforeCursor.match(/\{\{([a-z_]*)$/);
+     if (!match) return;
+     
+     // Posição onde {{ começa
+     const startOfTrigger = cursorPos - match[0].length;
+     const newContent = 
+       content.slice(0, startOfTrigger) + 
+       `{{${variable.key}}}` + 
+       content.slice(cursorPos);
+     setContent(newContent);
+     setAutocomplete(null);
+     
+     requestAnimationFrame(() => {
+       const newPos = startOfTrigger + variable.key.length + 4; // {{...}}
+       ta.focus();
+       ta.setSelectionRange(newPos, newPos);
+     });
+   };
+
+5. No JSX da textarea, adiciona os handlers:
+
+   <textarea
+     ref={textareaRef}
+     value={content}
+     onChange={handleTextareaChange}
+     onKeyDown={handleTextareaKeyDown}
+     onBlur={() => setTimeout(() => setAutocomplete(null), 150)}
+     ...
+   />
+
+6. Renderiza o dropdown como portal flutuante quando autocomplete?.open:
+
+   {autocomplete?.open && (() => {
+     const filtered = VARIABLES.filter(v => v.key.startsWith(autocomplete.query));
+     return (
+       <div 
+         className="fixed z-50 rounded-lg border border-border/40 bg-card shadow-xl overflow-hidden min-w-[260px]"
+         style={{ top: autocomplete.position.top, left: autocomplete.position.left }}
+       >
+         {filtered.map((v, idx) => (
+           <button
+             key={v.key}
+             type="button"
+             onMouseDown={(e) => { e.preventDefault(); completeVariable(v); }}
+             className={`w-full text-left px-3 py-2 text-sm hover:bg-primary/10 ${
+               idx === autocomplete.selectedIdx ? "bg-primary/15" : ""
+             }`}
+           >
+             <div className="font-mono text-xs text-primary">
+               {`{{${v.key}}}`}
+             </div>
+             <div className="text-[10px] text-muted-foreground/70">
+               {v.label} · ex: {v.example}
+             </div>
+           </button>
+         ))}
+       </div>
+     );
+   })()}
+
+═══ PARTE 2: Painel "Campos Disponíveis" vira referência pura ═══
+
+7. No painel lateral, REMOVE o botão "inserir" inteiro. Substitui o texto
+   introdutório por:
+
+   "Digite {{ no editor pra abrir autocomplete. Ou copie o nome da variável
+   abaixo e cole onde quiser. As variáveis viram valores reais quando o
+   coach roda a análise."
+
+8. Cada item da lista vira um card clicável que copia pro clipboard:
+
+   <button
+     key={v.key}
+     type="button"
+     onClick={async () => {
+       await navigator.clipboard.writeText(`{{${v.key}}}`);
+       // toast simples ou state visual: "copiado!" no botão por 2s
+     }}
+     className="w-full rounded-lg border border-border/30 bg-background/30 px-3 py-2 text-left hover:border-primary/50 hover:bg-primary/5 transition-all"
+   >
+     <div className="flex items-center justify-between gap-2">
+       <code className="font-mono text-xs text-primary px-1.5 py-0.5 rounded bg-card/60">
+         {`{{${v.key}}}`}
+       </code>
+       <span className="text-[10px] text-muted-foreground/40">click pra copiar</span>
+     </div>
+     <p className="mt-1 text-xs font-medium text-foreground">{v.label}</p>
+     <p className="text-[10px] text-muted-foreground/60">ex: {v.example}</p>
+   </button>
+
+9. APAGA insertVariable, lastCursorRef, e o useEffect com selectionchange —
+   nada disso é mais necessário.
+
+═══ Aceitação ═══
+
+10. Roda pnpm typecheck. Roda pnpm dev. Abre /admin/prompts/[id]/edit.
+11. Digita `{{` no meio do prompt. Confirma que dropdown aparece.
+12. Digita `{{ga` e confirma que o filtro funciona (mostra só game_name,
+    game_card_code_pattern, etc).
+13. Pressiona Enter ou Tab pra completar — variável aparece com chaves
+    fechadas, cursor depois do }}.
+14. Esc fecha dropdown sem completar.
+15. Click num card do painel lateral copia o token pro clipboard.
+
+Reporta quando estiver funcionando.
