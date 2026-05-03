@@ -15,6 +15,10 @@ interface DeckInputProps {
   gameConfig: GameConfig;
   featuredAnalysis?: { text: string; playerName: string };
   autoResume?: boolean;
+  /** Deck de exemplo pré-preenchido (editável). */
+  defaultDeck?: string;
+  /** Dias desde o último snapshot de meta ativo. Exibe aviso se > 14. */
+  metaSnapshotAgeDays?: number;
 }
 
 function sumQty(cards: { quantity: number }[]): number {
@@ -25,9 +29,7 @@ function sumQty(cards: { quantity: number }[]): number {
 
 function httpErrorMessage(status: number, serverMessage?: string): string {
   if (status === 422) {
-    return (
-      serverMessage ?? "Verifica os problemas no deck antes de analisar."
-    );
+    return serverMessage ?? "Verifica os problemas no deck antes de analisar.";
   }
   if (status === 503) {
     return "A análise está temporariamente indisponível — aguarda um instante e tenta de novo.";
@@ -56,21 +58,14 @@ interface AnalysisState {
   colorMap: Record<string, string>;
   /** ID da análise salva no DB (nanoid 24), vindo do header X-Analysis-Id. */
   analysisId: string;
-  /**
-   * Progresso do enriquecimento de cartas.
-   * null enquanto a fase de enrichment não começou.
-   */
+  /** Progresso do enriquecimento de cartas. null = fase não iniciada. */
   enrichProgress: { done: number; total: number } | null;
-  /**
-   * Percentual de cartas enriquecidas com sucesso (0–100).
-   * null = ainda não recebido (antes da resposta do servidor).
-   */
+  /** Percentual de cartas enriquecidas (0–100). null = não recebido ainda. */
   enrichmentPct: number | null;
-  /**
-   * Quando > 0: resposta 429 — número de segundos até a janela de rate limit
-   * expirar. O componente exibe countdown e bloqueia novo envio.
-   */
+  /** Quando > 0: rate limit ativo — segundos até expirar. */
   retryAfterSec: number;
+  /** Segundos de geração do streaming (início → fim). null = não calculado. */
+  elapsedSec: number | null;
 }
 
 const IDLE: AnalysisState = {
@@ -83,12 +78,20 @@ const IDLE: AnalysisState = {
   enrichProgress: null,
   enrichmentPct: null,
   retryAfterSec: 0,
+  elapsedSec: null,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, autoResume }: DeckInputProps) {
-  const [deck, setDeck] = useState("");
+export default function DeckInput({
+  placeholder,
+  gameConfig,
+  featuredAnalysis,
+  autoResume,
+  defaultDeck,
+  metaSnapshotAgeDays,
+}: DeckInputProps) {
+  const [deck, setDeck] = useState(defaultDeck ?? "");
   const [analysis, setAnalysis] = useState<AnalysisState>(IDLE);
   const [showFeatured, setShowFeatured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -110,45 +113,58 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         localStorage.removeItem(`pending_deck_${gameConfig.id}`);
       }
     } catch {
-      // localStorage indisponível (SSR, privado) — ignora silenciosamente
+      // localStorage indisponível — ignora
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Restaura última análise do localStorage (válida por 24h) ─────────────
   useEffect(() => {
-    if (autoResume) return; // auto-resume vai restaurar o estado via deck salvo
+    if (autoResume) return;
     try {
       const cacheKey = `ds_analysis_${gameConfig.id}`;
       const cached = localStorage.getItem(cacheKey);
       if (!cached) return;
-      const parsed = JSON.parse(cached) as {
+      const data = JSON.parse(cached) as {
         text?: string;
         analysisId?: string;
         colorMap?: Record<string, string>;
         enrichmentPct?: number | null;
+        elapsedSec?: number | null;
         savedAt?: number;
       };
       const MAX_AGE_MS = 24 * 60 * 60 * 1000;
-      if (!parsed.savedAt || Date.now() - parsed.savedAt > MAX_AGE_MS) {
+      if (!data.savedAt || Date.now() - data.savedAt > MAX_AGE_MS) {
         localStorage.removeItem(cacheKey);
         return;
       }
-      if (parsed.text) {
+      if (data.text) {
         setAnalysis({
           ...IDLE,
           phase: "done",
-          text: parsed.text,
-          analysisId: parsed.analysisId ?? "",
-          colorMap: parsed.colorMap ?? {},
-          enrichmentPct: parsed.enrichmentPct ?? null,
+          text: data.text,
+          analysisId: data.analysisId ?? "",
+          colorMap: data.colorMap ?? {},
+          enrichmentPct: data.enrichmentPct ?? null,
+          elapsedSec: data.elapsedSec ?? null,
         });
       }
     } catch {
-      // localStorage indisponível ou JSON inválido — ignora
+      // localStorage indisponível ou JSON inválido
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Título da aba dinâmico por fase ──────────────────────────────────────
+  useEffect(() => {
+    const PHASE_TITLES: Partial<Record<AnalysisPhase, string>> = {
+      enriching: "Carregando cartas... — Deck Sensei",
+      streaming: "Analisando... — Deck Sensei",
+      done: "Análise pronta ✓ — Deck Sensei",
+    };
+    document.title = PHASE_TITLES[analysis.phase] ?? "Deck Sensei";
+    return () => { document.title = "Deck Sensei"; };
+  }, [analysis.phase]);
 
   // ── Countdown de rate limit ───────────────────────────────────────────────
   useEffect(() => {
@@ -157,19 +173,16 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       return;
     }
     setCountdownSec(analysis.retryAfterSec);
-
     const interval = setInterval(() => {
       setCountdownSec((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          // Limpa o estado de rate limit para liberar o botão
           setAnalysis(IDLE);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [analysis.retryAfterSec]);
 
@@ -197,7 +210,6 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       setPendingResume(false);
       handleAnalyze();
     }
-  // handleAnalyze é estável via useCallback — ok omitir
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingResume, isReady]);
 
@@ -236,16 +248,12 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
     const abort = new AbortController();
     abortRef.current = abort;
 
-    // ── Layer 3: Validação do deck (sem chamar a API) ─────────────────────
+    // ── Validação do deck (sem chamar a API) ──────────────────────────────
     const validator = getValidator(gameConfig.validator);
     const validation = validator.validate(parsed);
 
     if (!validation.valid) {
-      setAnalysis({
-        ...IDLE,
-        phase: "error",
-        validationErrors: validation.errors,
-      });
+      setAnalysis({ ...IDLE, phase: "error", validationErrors: validation.errors });
       return;
     }
 
@@ -264,21 +272,13 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       });
 
       const cardApi = getCardAPI(gameConfig.card_api);
-      const enrichedMap = new Map<
-        string,
-        Awaited<ReturnType<typeof cardApi.fetchCard>>
-      >();
+      const enrichedMap = new Map<string, Awaited<ReturnType<typeof cardApi.fetchCard>>>();
 
-      // Inicia fase 1 com contador 0/total
       const enrichTotal = uniqueCards.length;
       let enrichDone = 0;
-      setAnalysis({
-        ...IDLE,
-        phase: "enriching",
-        enrichProgress: { done: 0, total: enrichTotal },
-      });
+      setAnalysis({ ...IDLE, phase: "enriching", enrichProgress: { done: 0, total: enrichTotal } });
 
-      // Pool com no máximo 5 requisições simultâneas para evitar burst
+      // Pool de 5 workers máx — evita burst de conexões em decks grandes
       const ENRICH_CONCURRENCY = 5;
       const queue = [...uniqueCards];
       const workers = Array.from(
@@ -309,20 +309,16 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       }));
 
       // ── Streaming da análise via /api/analyze ─────────────────────────
+      const streamStartMs = Date.now();
       setAnalysis({ ...IDLE, phase: "streaming" });
 
-      // Layer 1: erro de rede na requisição inicial
       let res: Response;
       try {
         res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: abort.signal,
-          body: JSON.stringify({
-            gameId: gameConfig.id,
-            deck: parsed,
-            enrichedCards,
-          }),
+          body: JSON.stringify({ gameId: gameConfig.id, deck: parsed, enrichedCards }),
         });
       } catch (fetchErr) {
         if ((fetchErr as { name?: string }).name === "AbortError") return;
@@ -334,28 +330,17 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         return;
       }
 
-      // Layer 2: erro HTTP do servidor
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const bodyTyped = body as {
-          error?: string;
-          message_pt?: string;
-          retryAfterSec?: number;
-        } | null;
+        const bodyTyped = body as { error?: string; message_pt?: string; retryAfterSec?: number } | null;
 
-        // 401: cadastro necessário
         if (res.status === 401 && bodyTyped?.error === "auth_required") {
-          try {
-            localStorage.setItem(`pending_deck_${gameConfig.id}`, deck);
-          } catch {
-            // localStorage indisponível — ignora
-          }
+          try { localStorage.setItem(`pending_deck_${gameConfig.id}`, deck); } catch {}
           setAnalysis(IDLE);
           setShowAuthModal(true);
           return;
         }
 
-        // 429: rate limit — inicia countdown
         if (res.status === 429) {
           const retryAfterSec =
             bodyTyped?.retryAfterSec ??
@@ -369,20 +354,12 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           return;
         }
 
-        setAnalysis({
-          ...IDLE,
-          phase: "error",
-          error: httpErrorMessage(res.status, bodyTyped?.error),
-        });
+        setAnalysis({ ...IDLE, phase: "error", error: httpErrorMessage(res.status, bodyTyped?.error) });
         return;
       }
 
       if (!res.body) {
-        setAnalysis({
-          ...IDLE,
-          phase: "error",
-          error: "Resposta inesperada do servidor — tenta de novo.",
-        });
+        setAnalysis({ ...IDLE, phase: "error", error: "Resposta inesperada do servidor — tenta de novo." });
         return;
       }
 
@@ -391,13 +368,10 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       try {
         const raw = res.headers.get("X-Meta-Color-Map");
         if (raw) colorMap = JSON.parse(decodeURIComponent(raw)) as Record<string, string>;
-      } catch {
-        // header ausente ou malformado — análise continua sem cores de arquetipo
-      }
+      } catch {}
       const analysisId = res.headers.get("X-Analysis-Id") ?? "";
       const enrichmentPctRaw = res.headers.get("X-Enrichment-Coverage");
-      const enrichmentPct =
-        enrichmentPctRaw !== null ? parseInt(enrichmentPctRaw, 10) : null;
+      const enrichmentPct = enrichmentPctRaw !== null ? parseInt(enrichmentPctRaw, 10) : null;
 
       // ── Leitura do stream ─────────────────────────────────────────────
       const reader = res.body.getReader();
@@ -407,22 +381,21 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (abort.signal.aborted) {
-          await reader.cancel();
-          return;
-        }
+        if (abort.signal.aborted) { await reader.cancel(); return; }
         fullText += decoder.decode(value, { stream: true });
         setAnalysis({ ...IDLE, phase: "streaming", text: fullText, colorMap, analysisId, enrichmentPct });
       }
 
-      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct });
-      // Persiste no localStorage para restaurar ao recarregar a página (24h)
+      const elapsedSec = Math.round((Date.now() - streamStartMs) / 1000);
+      setAnalysis({ ...IDLE, phase: "done", text: fullText, colorMap, analysisId, enrichmentPct, elapsedSec });
+
+      // Persiste no localStorage (24h)
       try {
         localStorage.setItem(
           `ds_analysis_${gameConfig.id}`,
-          JSON.stringify({ text: fullText, analysisId, colorMap, enrichmentPct, savedAt: Date.now() }),
+          JSON.stringify({ text: fullText, analysisId, colorMap, enrichmentPct, elapsedSec, savedAt: Date.now() }),
         );
-      } catch { /* localStorage indisponível */ }
+      } catch {}
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       console.error("[analyze]", err);
@@ -445,10 +418,16 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Textarea — read-only durante análise em progresso */}
+      {/* Textarea */}
       <Textarea
         value={deck}
         onChange={(e) => handleDeckChange(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && isReady && !isAnalyzing && !isRateLimited) {
+            e.preventDefault();
+            void handleAnalyze();
+          }
+        }}
         placeholder={placeholder}
         rows={12}
         className="font-mono text-sm leading-relaxed"
@@ -456,7 +435,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         readOnly={isAnalyzing}
       />
 
-      {/* Deck parse preview — só aparece quando idle/error */}
+      {/* Deck parse preview */}
       {parsed !== null && (phase === "idle" || phase === "error") && (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs">
@@ -479,12 +458,8 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
                   }
                 >
                   main deck:{" "}
-                  <span className="font-semibold tabular-nums">
-                    {mainDeckCount}
-                  </span>
-                  <span className="text-muted-foreground/60">
-                    /{main_deck_size}
-                  </span>
+                  <span className="font-semibold tabular-nums">{mainDeckCount}</span>
+                  <span className="text-muted-foreground/60">/{main_deck_size}</span>
                 </span>
 
                 {hasEggDeck && (
@@ -492,9 +467,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
                     <Divider />
                     <span className="text-muted-foreground">
                       egg deck:{" "}
-                      <span className="font-semibold tabular-nums text-foreground">
-                        {eggDeckCount}
-                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">{eggDeckCount}</span>
                     </span>
                   </>
                 )}
@@ -502,18 +475,14 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
                 {mainStatus === "low" && mainDeckCount > 0 && (
                   <>
                     <Divider />
-                    <span className="text-amber-400/80">
-                      faltam {main_deck_size - mainDeckCount}
-                    </span>
+                    <span className="text-amber-400/80">faltam {main_deck_size - mainDeckCount}</span>
                   </>
                 )}
 
                 {mainStatus === "high" && (
                   <>
                     <Divider />
-                    <span className="text-amber-400/80">
-                      {mainDeckCount - main_deck_size} a mais
-                    </span>
+                    <span className="text-amber-400/80">{mainDeckCount - main_deck_size} a mais</span>
                   </>
                 )}
               </>
@@ -523,21 +492,17 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           {parsed.errors.length > 0 && (
             <ul className="flex flex-col gap-0.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
               {parsed.errors.map((err, i) => (
-                <li key={i} className="text-xs text-destructive/80">
-                  {err}
-                </li>
+                <li key={i} className="text-xs text-destructive/80">{err}</li>
               ))}
             </ul>
           )}
         </div>
       )}
 
-      {/* Erros de validação do deck — tom de coach, lista estruturada */}
+      {/* Erros de validação */}
       {phase === "error" && analysis.validationErrors.length > 0 && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3">
-          <p className="text-xs font-medium text-amber-400/90">
-            Ajusta o deck antes de continuar:
-          </p>
+          <p className="text-xs font-medium text-amber-400/90">Ajusta o deck antes de continuar:</p>
           <ul className="mt-2 flex flex-col gap-1.5">
             {analysis.validationErrors.map((msg, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -552,9 +517,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       {/* Rate limit — mensagem + countdown */}
       {isRateLimited && (
         <div className="rounded-lg border border-orange-500/25 bg-orange-500/5 px-4 py-3">
-          <p className="text-xs font-medium text-orange-400/90">
-            {analysis.error}
-          </p>
+          <p className="text-xs font-medium text-orange-400/90">{analysis.error}</p>
           {countdownSec > 0 && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               Liberando em{" "}
@@ -567,7 +530,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         </div>
       )}
 
-      {/* Botão Analisar / erro de conexão ou servidor */}
+      {/* Botão Analisar */}
       {(phase === "idle" || phase === "error") && (
         <>
           {phase === "error" && analysis.error && !isRateLimited && (
@@ -576,20 +539,23 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
             </p>
           )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              size="lg"
-              disabled={!isReady || isRateLimited}
-              className="w-full sm:w-auto"
-              onClick={handleAnalyze}
-            >
-              {isRateLimited
-                ? countdownSec > 0
-                  ? `Aguarde ${formatCountdown(countdownSec)}`
-                  : "Analisar deck"
-                : phase === "error"
-                  ? "Tentar de novo"
-                  : "Analisar deck"}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                size="lg"
+                disabled={!isReady || isRateLimited}
+                className="w-full sm:w-auto"
+                onClick={handleAnalyze}
+              >
+                {isRateLimited
+                  ? countdownSec > 0 ? `Aguarde ${formatCountdown(countdownSec)}` : "Analisar deck"
+                  : phase === "error" ? "Tentar de novo" : "Analisar deck"}
+              </Button>
+              {phase === "idle" && isReady && (
+                <span className="text-xs text-muted-foreground/50 hidden sm:block">
+                  ou ⌘↵
+                </span>
+              )}
+            </div>
             {phase === "idle" && featuredAnalysis && (
               <button
                 type="button"
@@ -603,7 +569,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         </>
       )}
 
-      {/* Banner de cobertura de enriquecimento — só pós-streaming */}
+      {/* Banner de cobertura de enriquecimento */}
       {(phase === "streaming" || phase === "done") &&
         analysis.enrichmentPct !== null &&
         analysis.enrichmentPct < 100 && (
@@ -620,7 +586,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
           </div>
         )}
 
-      {/* Área de análise — fases 1, 2 e 3 */}
+      {/* Área de análise */}
       {showAnalysisArea && (
         <div className="border-t border-border/30 pt-4">
           <AnalysisStream
@@ -631,11 +597,13 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
             analysisId={analysis.analysisId}
             gameId={gameConfig.id}
             onReset={handleReset}
+            elapsedSec={analysis.elapsedSec}
+            metaSnapshotAgeDays={metaSnapshotAgeDays}
           />
         </div>
       )}
 
-      {/* Modal de análise featured */}
+      {/* Modal análise featured */}
       {showFeatured && featuredAnalysis && (
         <FeaturedModal
           analysisText={featuredAnalysis.text}
@@ -645,17 +613,13 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
       )}
 
       {/* Modal de cadastro obrigatório */}
-      <AuthRequiredModal
-        open={showAuthModal}
-        onOpenChange={setShowAuthModal}
-      />
+      <AuthRequiredModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
   );
 }
 
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
 
-/** Formata segundos como mm:ss ou Xs */
 function formatCountdown(sec: number): string {
   if (sec >= 60) {
     const m = Math.floor(sec / 60);
@@ -665,13 +629,10 @@ function formatCountdown(sec: number): string {
   return `${sec}s`;
 }
 
-// ─── Subcomponentes ───────────────────────────────────────────────────────────
-
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <span className="text-muted-foreground">
-      {label}:{" "}
-      <span className="font-semibold tabular-nums text-foreground">{value}</span>
+      {label}: <span className="font-semibold tabular-nums text-foreground">{value}</span>
     </span>
   );
 }

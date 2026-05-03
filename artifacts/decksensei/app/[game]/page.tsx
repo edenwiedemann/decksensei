@@ -1,5 +1,13 @@
 import { unstable_cache } from "next/cache";
-import { db, analysesTable, gamesTable, eq, and, isNull } from "@workspace/db";
+import {
+  db,
+  analysesTable,
+  gamesTable,
+  metaSnapshotsTable,
+  eq,
+  and,
+  isNull,
+} from "@workspace/db";
 import { notFound } from "next/navigation";
 import DeckInput from "./_components/DeckInput";
 import type { GameConfig } from "@/lib/game-config";
@@ -33,18 +41,29 @@ const getCachedFeaturedAnalysis = unstable_cache(
 );
 
 const DECK_PLACEHOLDERS: Record<string, string> = {
-  digimon: `Cole sua decklist aqui (formato Digimon padrão: 4 BT13-040 Magnamon)
+  digimon: `Cole sua decklist aqui (formato Digimon padrão: 4 BT13-040 Magnamon)...`,
+};
 
-Exemplo:
-4 BT13-040 Magnamon
-4 BT20-083 Omekamon
-4 BT13-087 Dynasmon
-3 BT13-019 Gankoomon
-4 BT20-102 Omnimon (X Antibody)
-...
+// Deck de exemplo pré-preenchido — editável, mostra o formato correto no primeiro acesso
+const SAMPLE_DECKS: Record<string, string> = {
+  digimon: `4 BT21-001 Agumon (2006)
+4 BT21-002 Greymon (2006)
+4 BT21-003 MetalGreymon (2006)
+4 BT21-004 WarGreymon (2006)
+3 BT21-009 ShineGreymon
+3 BT21-010 ShineGreymon Burst Mode
+4 BT20-007 Agumon -Yuki no Kizuna-
+3 BT13-009 Agumon (Digimon Adventure:)
+4 BT21-106 Taichi Yagami
+4 BT21-107 Sora Takenouchi & Yamato Ishida
+3 BT16-089 Taichi Yagami & Yamato Ishida
+4 BT21-097 Booster Capsule (Orange)
+4 BT13-093 Taichi Yagami & Agumon
+2 BT21-098 Crest of Courage
 
 Egg deck:
-4 BT13-007 King Drasil_7D6`,
+4 BT21-005 Koromon
+4 BT21-006 Botamon`,
 };
 
 const GAME_BADGE_LABELS: Record<string, string> = {
@@ -56,19 +75,26 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
   const { resume } = await searchParams;
   const autoResume = resume === "true";
 
-  const [gameResults, featured] = await Promise.all([
-    db
-      .select()
-      .from(gamesTable)
-      .where(eq(gamesTable.id, game))
-      .limit(1),
+  const [gameResults, featured, metaSnapshotRows] = await Promise.all([
+    db.select().from(gamesTable).where(eq(gamesTable.id, game)).limit(1),
     getCachedFeaturedAnalysis(game),
+    db
+      .select({ createdAt: metaSnapshotsTable.createdAt })
+      .from(metaSnapshotsTable)
+      .where(and(eq(metaSnapshotsTable.gameId, game), eq(metaSnapshotsTable.active, true)))
+      .limit(1),
   ]);
 
   const gameData = gameResults[0];
   if (!gameData) notFound();
 
+  // Dias desde o último snapshot de meta ativo (para badge de aviso)
+  const metaSnapshotAgeDays = metaSnapshotRows[0]?.createdAt
+    ? Math.floor((Date.now() - metaSnapshotRows[0].createdAt.getTime()) / 86_400_000)
+    : undefined;
+
   const placeholder = DECK_PLACEHOLDERS[game] ?? "Cole sua decklist aqui...";
+  const defaultDeck = SAMPLE_DECKS[game];
   const badgeLabel = GAME_BADGE_LABELS[game] ?? gameData.name;
 
   const gameConfig: GameConfig =
@@ -131,6 +157,8 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
             gameConfig={gameConfig}
             featuredAnalysis={featuredAnalysis}
             autoResume={autoResume}
+            defaultDeck={defaultDeck}
+            metaSnapshotAgeDays={metaSnapshotAgeDays}
           />
         </div>
       </section>

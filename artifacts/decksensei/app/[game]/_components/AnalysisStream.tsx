@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Share2, Check, Mail } from "lucide-react";
 import AnalysisResult from "./AnalysisResult";
@@ -14,6 +14,10 @@ interface AnalysisStreamProps {
   analysisId: string;
   gameId: string;
   onReset: () => void;
+  /** Segundos de geração do streaming. Exibido discretamente após concluir. */
+  elapsedSec?: number | null;
+  /** Dias desde o último snapshot de meta ativo. Exibe aviso se > 14. */
+  metaSnapshotAgeDays?: number;
 }
 
 export default function AnalysisStream({
@@ -24,6 +28,8 @@ export default function AnalysisStream({
   analysisId,
   gameId,
   onReset,
+  elapsedSec,
+  metaSnapshotAgeDays,
 }: AnalysisStreamProps) {
   const hasText = text.length > 0;
   const [copied, setCopied] = useState(false);
@@ -37,6 +43,17 @@ export default function AnalysisStream({
     } catch {
       window.prompt("Copie o link:", url);
     }
+  }
+
+  function handleEditAndReanalyze() {
+    onReset();
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>("textarea");
+      if (ta) {
+        ta.focus();
+        ta.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
   }
 
   return (
@@ -59,18 +76,16 @@ export default function AnalysisStream({
                 <span className="tabular-nums">
                   {enrichProgress.total > 0
                     ? Math.round((enrichProgress.done / enrichProgress.total) * 100)
-                    : 0}
-                  %
+                    : 0}%
                 </span>
               </div>
               <div className="h-1 w-full overflow-hidden rounded-full bg-border/40">
                 <div
                   className="h-full rounded-full bg-primary/60 transition-all duration-300 ease-out"
                   style={{
-                    width:
-                      enrichProgress.total > 0
-                        ? `${(enrichProgress.done / enrichProgress.total) * 100}%`
-                        : "0%",
+                    width: enrichProgress.total > 0
+                      ? `${(enrichProgress.done / enrichProgress.total) * 100}%`
+                      : "0%",
                   }}
                 />
               </div>
@@ -84,7 +99,8 @@ export default function AnalysisStream({
         <div className="flex items-center gap-3 py-6">
           <LoadingDots />
           <span className="text-sm text-muted-foreground">
-            Analisando estratégia...
+            Analisando estratégia…{" "}
+            <span className="text-xs text-muted-foreground/50">(20–30s)</span>
           </span>
         </div>
       )}
@@ -101,11 +117,26 @@ export default function AnalysisStream({
         </AnalysisErrorBoundary>
       )}
 
+      {/* Badge de meta desatualizado */}
+      {phase === "done" && hasText && !!metaSnapshotAgeDays && metaSnapshotAgeDays > 14 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-400/80">
+          <span className="shrink-0">⚠</span>
+          <span>
+            Meta de <span className="font-semibold">{metaSnapshotAgeDays} dias</span> atrás
+            — a análise pode não refletir mudanças recentes no formato.
+          </span>
+        </div>
+      )}
+
       {/* Ações pós-análise */}
       {phase === "done" && hasText && (
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <Button variant="outline" size="sm" onClick={onReset}>
             Nova análise
+          </Button>
+
+          <Button variant="ghost" size="sm" onClick={handleEditAndReanalyze}>
+            Editar e reanalisar
           </Button>
 
           {analysisId && (
@@ -134,6 +165,12 @@ export default function AnalysisStream({
           )}
 
           {analysisId && <EmailForm analysisId={analysisId} />}
+
+          {!!elapsedSec && elapsedSec > 0 && (
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground/35">
+              {elapsedSec}s
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -143,7 +180,6 @@ export default function AnalysisStream({
 // ─── EmailForm ────────────────────────────────────────────────────────────────
 
 type EmailPhase = "idle" | "input" | "sending" | "sent" | "error";
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function EmailForm({ analysisId }: { analysisId: string }) {
@@ -169,10 +205,7 @@ function EmailForm({ analysisId }: { analysisId: string }) {
         return;
       }
       setPhase("sent");
-      setTimeout(() => {
-        setPhase("idle");
-        setEmail("");
-      }, 4000);
+      setTimeout(() => { setPhase("idle"); setEmail(""); }, 4000);
     } catch {
       setErrorMsg("Sem conexão. Tenta de novo.");
       setPhase("error");
@@ -190,9 +223,7 @@ function EmailForm({ analysisId }: { analysisId: string }) {
   }
 
   if (phase === "error") {
-    return (
-      <span className="text-xs text-destructive/80">{errorMsg}</span>
-    );
+    return <span className="text-xs text-destructive/80">{errorMsg}</span>;
   }
 
   if (phase === "idle") {
@@ -204,7 +235,6 @@ function EmailForm({ analysisId }: { analysisId: string }) {
     );
   }
 
-  // "input" | "sending"
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-2">
       <input
@@ -216,11 +246,7 @@ function EmailForm({ analysisId }: { analysisId: string }) {
         autoFocus
         className="h-8 rounded-md border border-border/50 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50"
       />
-      <Button
-        size="sm"
-        type="submit"
-        disabled={phase === "sending" || !EMAIL_RE.test(email)}
-      >
+      <Button size="sm" type="submit" disabled={phase === "sending" || !EMAIL_RE.test(email)}>
         {phase === "sending" ? "Enviando..." : "Enviar"}
       </Button>
       <button
@@ -235,7 +261,7 @@ function EmailForm({ analysisId }: { analysisId: string }) {
   );
 }
 
-// ─── Subcomponente interno ────────────────────────────────────────────────────
+// ─── LoadingDots ──────────────────────────────────────────────────────────────
 
 function LoadingDots() {
   return (

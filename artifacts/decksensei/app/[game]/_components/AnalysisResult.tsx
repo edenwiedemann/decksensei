@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -11,6 +11,8 @@ import {
   BarChart3,
   Lightbulb,
   FileText,
+  Copy,
+  Check,
   type LucideIcon,
 } from "lucide-react";
 import SuggestionsCard, { parseSuggestionsBlock } from "./SuggestionsCard";
@@ -72,6 +74,42 @@ const DEFAULT_META: SectionMeta = {
   bgClass: "bg-muted/40",
   borderClass: "border-border/30",
 };
+
+// ─── Score do deck (A/B/C/D) ──────────────────────────────────────────────────
+
+function computeDeckGrade(text: string): { grade: "A" | "B" | "C" | "D"; pct: number } | null {
+  const m = text.match(/similaridade aproximada\s*\*\*(\d+)%\*?\*?/);
+  if (!m) return null;
+  const pct = parseInt(m[1], 10);
+  return {
+    grade: pct >= 80 ? "A" : pct >= 65 ? "B" : pct >= 50 ? "C" : "D",
+    pct,
+  };
+}
+
+const GRADE_STYLES = {
+  A: { border: "border-emerald-400/30", bg: "bg-emerald-400/10", text: "text-emerald-400", label: "Deck forte" },
+  B: { border: "border-sky-400/30",     bg: "bg-sky-400/10",     text: "text-sky-400",     label: "Deck sólido" },
+  C: { border: "border-amber-400/30",   bg: "bg-amber-400/10",   text: "text-amber-400",   label: "Deck com margem" },
+  D: { border: "border-rose-400/30",    bg: "bg-rose-400/10",    text: "text-rose-400",    label: "Deck inicial" },
+} as const;
+
+function DeckScoreBadge({ grade, pct }: { grade: "A" | "B" | "C" | "D"; pct: number }) {
+  const s = GRADE_STYLES[grade];
+  return (
+    <div className={`flex items-center gap-4 rounded-xl border ${s.border} ${s.bg} px-5 py-4`}>
+      <span className={`text-4xl font-black tabular-nums leading-none ${s.text}`}>
+        {grade}
+      </span>
+      <div>
+        <p className={`text-sm font-bold ${s.text}`}>{s.label}</p>
+        <p className="text-xs text-muted-foreground">
+          {pct}% de similaridade com o arquetipo mais próximo do meta
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ─── Mapa de cores Digimon → CSS ──────────────────────────────────────────────
 
@@ -309,6 +347,21 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
   const meta = SECTION_META[section.title] ?? DEFAULT_META;
   const Icon = meta.icon;
   const showCursor = isLast && streaming;
+  const [sectionCopied, setSectionCopied] = useState(false);
+
+  async function handleSectionCopy() {
+    try {
+      const clean = section.content
+        .replace(/```sugestoes[\s\S]*?```/g, "")
+        .replace(/```[\s\S]*?```/g, "")
+        .trim();
+      await navigator.clipboard.writeText(`## ${section.title}\n\n${clean}`);
+      setSectionCopied(true);
+      setTimeout(() => setSectionCopied(false), 2000);
+    } catch {
+      // clipboard API indisponível
+    }
+  }
 
   const isComparison = section.title === "Comparação com o meta";
   const isSuggestions = section.title === "Sugestões de troca";
@@ -404,6 +457,18 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           {section.title}
         </h2>
+        {!streaming && (
+          <button
+            onClick={handleSectionCopy}
+            className="ml-auto rounded p-1.5 text-muted-foreground/25 transition-colors hover:text-muted-foreground/70"
+            aria-label="Copiar seção"
+            title="Copiar seção"
+          >
+            {sectionCopied
+              ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+              : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -473,8 +538,13 @@ export default function AnalysisResult({ text, streaming, colorMap, analysisId }
   const sections = parseSections(text);
   if (sections.length === 0) return null;
 
+  const deckScore = !streaming ? computeDeckGrade(text) : null;
+
   return (
     <div className="flex flex-col gap-4">
+      {deckScore && (
+        <DeckScoreBadge grade={deckScore.grade} pct={deckScore.pct} />
+      )}
       {sections.map((section, i) => (
         <SectionCard
           key={section.title || i}
