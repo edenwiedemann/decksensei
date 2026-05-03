@@ -350,20 +350,19 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   const encoder = new TextEncoder();
 
-  // Marcador que delimita o fim do preview gratuito
+  // Marcador que delimita o fim do preview gratuito para visitantes anônimos
   const PARTIAL_MARKER = "\n## Plano de jogo";
+  // Fallback: se o marcador não aparecer até esta quantidade de chars enviados,
+  // fecha o stream mesmo assim para impedir que a análise completa vaze.
+  const PARTIAL_MAX_SENT = 5000;
 
-  // ── Visitante anônimo: bufferiza a resposta e trunca antes de enviar ─────
-  // Isto garante que:
-  //   (a) X-Partial-Analysis reflita truncação real (não intenção)
-  //   (b) O stream Anthropic seja cancelado imediatamente ao detectar o marcador
-  //   (c) O cliente recebe o texto correto num Response simples (não streaming)
-  if (isPartialStream) {
-    let fullText = "";
-    let truncated = false;
+  const readableStream = new ReadableStream({
+    async start(controller) {
+      let fullText = "";
+      let sentLength = 0;
+      let streamTruncated = false;
 
-    try {
-      const stream = anthropic.messages.stream({
+      const anthropicStream = anthropic.messages.stream({
         model: CLAUDE_MODEL,
         max_tokens: MAX_TOKENS,
         temperature: TEMPERATURE,
@@ -371,102 +370,68 @@ export async function POST(request: NextRequest) {
         messages: built.messages,
       });
 
-      for await (const event of stream) {
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        ) {
-          fullText += event.delta.text;
-          if (fullText.includes(PARTIAL_MARKER)) {
-            truncated = true;
-            // Aborta o stream Anthropic imediatamente — não precisa de mais texto
-            stream.abort();
-            break;
-          }
-        }
-      }
-    } catch (err) {
-      // APIUserAbortError esperado quando stream.abort() é chamado
-      const name = (err as { name?: string })?.name;
-      if (name !== "APIUserAbortError") {
-        logAnthropicError(analysisId, err);
-        return Response.json({ error: "stream_error" }, { status: 500 });
-      }
-    }
-
-    const previewText = truncated
-      ? fullText.slice(0, fullText.indexOf(PARTIAL_MARKER))
-      : fullText;
-
-    const responseTimeMs = Date.now() - startTime;
-
-    // Persiste preview no DB (best-effort, sem custo tracking)
-    try {
-      await db.insert(analysesTable).values({
-        id: analysisId,
-        gameId,
-        deckText: deckToText(deck),
-        deckParsed: deck as unknown as Record<string, unknown>,
-        analysisText: previewText,
-        promptVersionId: built.promptVersionId,
-        metaSnapshotId: built.metaSnapshotId,
-        similarArchetypeId: null,
-        responseTimeMs,
-        deckName,
-      });
-    } catch (dbErr) {
-      console.error("[analyze] falha ao salvar análise parcial no DB:", dbErr);
-    }
-
-    const partialHeaders = new Headers({
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-cache, no-store",
-      "X-Analysis-Id": analysisId,
-      "X-Meta-Color-Map": colorMapHeader,
-      "X-Enrichment-Coverage": String(enrichmentPct),
-      "X-Partial-Analysis": truncated ? "true" : "false",
-    });
-    if (shouldSetCountCookie) {
-      partialHeaders.set(
-        "Set-Cookie",
-        "analyses_count=1; Path=/; Max-Age=31536000; SameSite=Lax",
-      );
-    }
-    return new Response(previewText, { headers: partialHeaders });
-  }
-
-  // ── Usuário autenticado: streaming completo ───────────────────────────────
-  const readableStream = new ReadableStream({
-    async start(controller) {
-      let fullText = "";
-
       try {
-        const stream = anthropic.messages.stream({
-          model: CLAUDE_MODEL,
-          max_tokens: MAX_TOKENS,
-          temperature: TEMPERATURE,
-          system: built.system,
-          messages: built.messages,
-        });
-
-        for await (const event of stream) {
+        for await (const event of anthropicStream) {
           if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
           ) {
             const text = event.delta.text;
             fullText += text;
+
+            if (isPartialStream && !streamTruncated) {
+              const markerIdx = fullText.indexOf(PARTIAL_MARKER);
+              const hitGuard = sentLength >= PARTIAL_MAX_SENT;
+
+              if (markerIdx !== -1 || hitGuard) {
+                // Envia apenas o que ainda não foi enviado, até o marcador (ou guarda)
+                const cutAt = markerIdx !== -1 ? markerIdx : sentLength;
+                const toSend = fullText.slice(sentLength, cutAt);
+                if (toSend) controller.enqueue(encoder.encode(toSend));
+                streamTruncated = true;
+
+                // Fecha o controller imediatamente — cliente recebe o preview completo
+                controller.close();
+
+                // Cancela o stream Anthropic para economizar tokens
+                try { anthropicStream.abort(); } catch {}
+
+                // Persiste o preview no DB (fire-and-forget — não bloqueia a resposta)
+                const previewText = fullText.slice(0, cutAt);
+                const responseTimeMs = Date.now() - startTime;
+                db.insert(analysesTable)
+                  .values({
+                    id: analysisId,
+                    gameId,
+                    deckText: deckToText(deck),
+                    deckParsed: deck as unknown as Record<string, unknown>,
+                    analysisText: previewText,
+                    promptVersionId: built.promptVersionId,
+                    metaSnapshotId: built.metaSnapshotId,
+                    similarArchetypeId: null,
+                    responseTimeMs,
+                    deckName,
+                  })
+                  .catch((e) =>
+                    console.error("[analyze] partial DB insert failed:", e),
+                  );
+
+                return;
+              }
+            }
+
             controller.enqueue(encoder.encode(text));
+            sentLength += text.length;
           }
         }
 
-        const finalMessage = await stream.finalMessage();
+        // ── Análise completa (usuário autenticado ou parcial sem marcador) ──
+        const finalMessage = await anthropicStream.finalMessage();
         const responseTimeMs = Date.now() - startTime;
         const inputTokens = finalMessage.usage.input_tokens;
         const outputTokens = finalMessage.usage.output_tokens;
 
-        // ── 5. Persiste análise no DB (best-effort) ───────────────────
+        // ── 5. Persiste análise no DB (best-effort) ──────────────────────
         try {
           const similarArchetypeId = extractSimilarArchetype(
             fullText,
@@ -488,15 +453,17 @@ export async function POST(request: NextRequest) {
           console.error("[analyze] falha ao salvar análise no DB:", dbErr);
         }
 
-        // ── 6. Rastreia custo com tokens reais da API ─────────────────
+        // ── 6. Rastreia custo com tokens reais da API ─────────────────────
         await trackCost(inputTokens, outputTokens, analysisId);
       } catch (err) {
+        // Se o stream já foi fechado (truncado), ignora erros do abort
+        if (streamTruncated) return;
         logAnthropicError(analysisId, err);
         controller.error(new Error("stream_error"));
         return;
       }
 
-      controller.close();
+      if (!streamTruncated) controller.close();
     },
   });
 
@@ -507,7 +474,9 @@ export async function POST(request: NextRequest) {
     "X-Analysis-Id": analysisId,
     "X-Meta-Color-Map": colorMapHeader,
     "X-Enrichment-Coverage": String(enrichmentPct),
-    "X-Partial-Analysis": "false",
+    // Para visitantes anônimos, sempre sinalizamos que é parcial —
+    // o header reflete a intenção de truncação (definido antes do stream).
+    "X-Partial-Analysis": isPartialStream ? "true" : "false",
   });
 
   if (shouldSetCountCookie) {
