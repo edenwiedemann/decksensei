@@ -1,8 +1,11 @@
 import { db, analysesTable, gamesTable, isNull, eq, and } from "@workspace/db";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import AnalysisResult from "../../_components/AnalysisResult";
 import { computeDeckGrade } from "@/lib/deck-score";
+import { getSessionUser, SESSION_COOKIE } from "@/lib/auth/session";
+import DeckNameEditor from "./_components/DeckNameEditor";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,7 @@ async function getAnalysis(id: string, gameId: string) {
       id: analysesTable.id,
       analysisText: analysesTable.analysisText,
       gameId: analysesTable.gameId,
+      userId: analysesTable.userId,
       deckName: analysesTable.deckName,
       similarArchetypeId: analysesTable.similarArchetypeId,
       createdAt: analysesTable.createdAt,
@@ -109,11 +113,27 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 
 export default async function SharedAnalysisPage({ params }: PageParams) {
   const { game, id } = await params;
-  const analysis = await getAnalysis(id, game);
+
+  const [analysis, cookieStore] = await Promise.all([
+    getAnalysis(id, game),
+    cookies(),
+  ]);
 
   if (!analysis) notFound();
 
   const grade = computeDeckGrade(analysis.analysisText);
+
+  // Check ownership for inline edit
+  const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
+  const sessionUser = sessionToken ? await getSessionUser(sessionToken) : null;
+  const isOwner = !!sessionUser && analysis.userId === sessionUser.id;
+
+  // Fallback title for the DeckNameEditor (shown when no deck name set)
+  const fallbackTitle = analysis.similarArchetypeId
+    ? `${analysis.similarArchetypeId}${grade ? ` — Deck ${grade.grade}` : ""}`
+    : grade
+      ? `Deck ${grade.grade} — ${analysis.gameName}`
+      : `Análise de ${analysis.gameName}`;
 
   const date = analysis.createdAt.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -155,21 +175,31 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
 
       {/* Conteúdo */}
       <main className="mx-auto max-w-2xl px-6 py-12 pb-28">
-        {/* Título do deck + badge read-only */}
+        {/* Título do deck */}
         <div className="mb-6 flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {analysis.deckName
-              ? `${analysis.deckName} — Análise`
-              : analysis.similarArchetypeId
-                ? `${analysis.similarArchetypeId}${grade ? ` — Deck ${grade.grade}` : ""}`
-                : grade
-                  ? `Deck ${grade.grade} — ${analysis.gameName}`
-                  : `Análise de ${analysis.gameName}`}
-          </h1>
+          {isOwner ? (
+            <DeckNameEditor
+              analysisId={analysis.id}
+              initialName={analysis.deckName ?? null}
+              fallbackTitle={fallbackTitle}
+            />
+          ) : (
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {analysis.deckName
+                ? `${analysis.deckName} — Análise`
+                : fallbackTitle}
+            </h1>
+          )}
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
-              Análise compartilhada · somente leitura
-            </span>
+            {isOwner ? (
+              <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
+                Sua análise · clique no lápis para renomear
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
+                Análise compartilhada · somente leitura
+              </span>
+            )}
           </div>
         </div>
 
