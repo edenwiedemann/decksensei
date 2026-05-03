@@ -5,6 +5,7 @@ import { requireAdminCookie } from "@/lib/auth/admin";
 import { getGames } from "@/lib/games/list";
 import GameSelector from "../_components/GameSelector";
 import CreateSnapshotButton from "./_components/CreateSnapshotButton";
+import SnapshotRollbackButton, { type SnapshotCandidate } from "./_components/SnapshotRollbackButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,6 +55,18 @@ export default async function MetaListPage({
   const activeSnap = snapshots.find((s) => s.active);
   const gameName = games.find((g) => g.id === gameId)?.label ?? gameId;
 
+  const rollbackCandidates: SnapshotCandidate[] = snapshots
+    .filter((s) => !s.active)
+    .slice(0, 5)
+    .map((s) => ({
+      id: s.id,
+      version: s.version,
+      notes: s.notes,
+      analyses_count: s.analyses_count,
+      n_archetypes: s.n_archetypes,
+      created_at: s.created_at,
+    }));
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       <header className="flex items-center justify-between border-b border-border/40 px-6 py-4">
@@ -68,6 +81,13 @@ export default async function MetaListPage({
         </div>
         <div className="flex items-center gap-3">
           <GameSelector games={games} current={gameId} />
+          {activeSnap && (
+            <SnapshotRollbackButton
+              gameId={gameId}
+              activeVersion={activeSnap.version}
+              candidates={rollbackCandidates}
+            />
+          )}
           <CreateSnapshotButton
             gameId={gameId}
             activeSnapshotId={activeSnap?.id ?? null}

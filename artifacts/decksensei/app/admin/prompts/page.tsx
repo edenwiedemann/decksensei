@@ -5,6 +5,7 @@ import { requireAdminCookie } from "@/lib/auth/admin";
 import { getGames } from "@/lib/games/list";
 import GameSelector from "../_components/GameSelector";
 import PromptRowActions from "./_components/PromptRowActions";
+import PromptRollbackButton, { type PromptCandidate } from "./_components/PromptRollbackButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +64,18 @@ export default async function PromptsListPage({
   const prompts = await getPrompts(gameId);
   const gameName = games.find((g) => g.id === gameId)?.label ?? gameId;
 
+  const activePrompt = prompts.find((p) => p.active);
+  const rollbackCandidates: PromptCandidate[] = prompts
+    .filter((p) => !p.active)
+    .slice(0, 5)
+    .map((p) => ({
+      id: p.id,
+      version: p.version,
+      notes: p.notes,
+      activated_at: p.activated_at,
+      analyses_count: p.analyses_count,
+    }));
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* Header */}
@@ -81,6 +94,13 @@ export default async function PromptsListPage({
         </div>
         <div className="flex items-center gap-3">
           <GameSelector games={games} current={gameId} />
+          {activePrompt && (
+            <PromptRollbackButton
+              gameId={gameId}
+              activeVersion={activePrompt.version}
+              candidates={rollbackCandidates}
+            />
+          )}
           <Link
             href={`/admin/prompts/new?game=${gameId}`}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
