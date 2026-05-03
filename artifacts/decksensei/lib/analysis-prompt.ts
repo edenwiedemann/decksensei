@@ -5,6 +5,10 @@
  *   → Promise<{ system, messages, promptVersionId, metaSnapshotId }>
  *
  * Todos os dados do DB são carregados internamente com cache de 60 s.
+ *
+ * v3: o contexto de arquetipos é gerado a partir das evidências em runtime,
+ * não dos campos históricos win_rate_pct/meta_share_pct da snapshot.
+ * Cada arquetipo recebe um bloco de confiança (score 0–100, evidências top 5).
  */
 
 import type { ParsedDeck, EnrichedCard } from "@/lib/games/types";
@@ -16,6 +20,7 @@ import {
   promptsTable,
   metaSnapshotsTable,
 } from "@workspace/db";
+import { computeArchetypeConfidence } from "@/lib/evidence/score";
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
@@ -160,7 +165,6 @@ async function getActiveLocalSnapshot(
   gameId: string,
 ): Promise<SnapshotRow | null> {
   const key = `snapshot:active:local:${gameId}`;
-  // Usa cacheHas para distinguir "cache miss" de "cached null"
   if (cacheHas(key)) return fromCache<SnapshotRow | null>(key);
 
   const rows = await db
@@ -259,84 +263,163 @@ function deriveLocalLabel(version: string): string {
   return location ? `META LOCAL (${location})` : "META LOCAL";
 }
 
-/** Renderiza a lista de arquetipos em linhas de texto estruturado. */
-function renderArchetypeList(archetypes: MetaArchetype[]): string[] {
+/**
+ * Constrói o bloco de texto de um único arquetipo substituindo os campos
+ * históricos (win_rate_pct, meta_share_pct) pelo score de confiança e
+ * evidências em runtime. Dados estáticos da snapshot (cores, key cards,
+ * matchups, decklist exemplo, coach notes) são mantidos.
+ *
+ * Async porque consulta a tabela meta_archetype_evidences no DB.
+ */
+async function buildArchetypeBlock(
+  arch: MetaArchetype,
+  gameId: string,
+  snapshotDate?: string,
+): Promise<string> {
+  const confidence = await computeArchetypeConfidence(gameId, arch.id);
   const lines: string[] = [];
-  for (const arch of archetypes) {
-    lines.push(`=== ${arch.name_pt} ===`);
-    lines.push(
-      `Tier ${arch.tier} | Share: ${arch.meta_share_pct}% | WR: ${arch.win_rate_pct}% | Record: ${arch.record}`,
-    );
-    lines.push(`Cores: ${arch.colors.join(", ")}`);
-    lines.push(`Estilo de jogo: ${arch.play_style_pt}`);
-    lines.push("");
 
-    if (arch.key_cards.length > 0) {
-      lines.push("Key cards:");
-      for (const kc of arch.key_cards) {
-        const note = kc.note_pt ? ` — ${kc.note_pt}` : "";
-        lines.push(`  ${kc.code} ${kc.name} [${kc.role}]${note}`);
+  lines.push(`=== ${arch.name_pt} ===`);
+  lines.push(`Tier: ${arch.tier}`);
+
+  // ── Bloco de confiança (substitui WR/share históricos da snapshot) ──────────
+  if (confidence.evidences.length === 0) {
+    lines.push(`Confiança: 0/100 (sem evidências externas — dados apenas históricos)`);
+    lines.push(`WR histórico (snapshot ${snapshotDate ?? "N/A"}): ${arch.win_rate_pct}%`);
+    lines.push(`Share histórico (snapshot): ${arch.meta_share_pct}%`);
+    lines.push(`AVISO: arquetipo sem evidências recentes. Trate como leitura provisória.`);
+  } else {
+    const conf = confidence.score;
+    const confLabel = conf >= 70 ? "alta" : conf >= 40 ? "média" : "baixa";
+    lines.push(`Confiança agregada: ${conf}/100 (${confLabel})`);
+
+    if (confidence.weightedWinRate != null) {
+      lines.push(`Win rate ponderado: ${confidence.weightedWinRate.toFixed(1)}%`);
+      if (
+        confidence.winRateRange &&
+        confidence.winRateRange[1] - confidence.winRateRange[0] > 5
+      ) {
+        lines.push(
+          `Range observado entre fontes: ${confidence.winRateRange[0].toFixed(1)}% — ${confidence.winRateRange[1].toFixed(1)}% (sensibilidade alta)`,
+        );
       }
-      lines.push("");
     }
 
-    if (arch.good_matchups.length > 0) {
-      const good = arch.good_matchups
-        .map((m) => `${m.vs} (${m.win_rate_pct}%)`)
-        .join(", ");
-      lines.push(`Matchups favoráveis: ${good}`);
-    }
-    if (arch.bad_matchups.length > 0) {
-      const bad = arch.bad_matchups
-        .map((m) => `${m.vs} (${m.win_rate_pct}%)`)
-        .join(", ");
-      lines.push(`Matchups difíceis: ${bad}`);
-    }
-    if (arch.good_matchups.length > 0 || arch.bad_matchups.length > 0) {
-      lines.push("");
-    }
+    lines.push(`Sample combinado: ${confidence.totalSampleSize} partidas`);
+    lines.push("");
+    lines.push("Evidências (top 5 por relevância):");
 
-    const mainCards = arch.example_decklist.main
-      .map((c) => `${c.qty}×${c.code} ${c.name}`)
+    const sorted = [...confidence.evidences]
+      .sort((a, b) => {
+        const aScore =
+          (a.sourceWeight ?? 0) * (a.recencyFactor ?? 1) * (a.verified ? 1 : 0.6);
+        const bScore =
+          (b.sourceWeight ?? 0) * (b.recencyFactor ?? 1) * (b.verified ? 1 : 0.6);
+        return bScore - aScore;
+      })
+      .slice(0, 5);
+
+    for (const ev of sorted) {
+      const verifiedTag = ev.verified ? " ✓" : "";
+      const sample = ev.data?.sample_size ?? "N/A";
+      const wr =
+        ev.data?.win_rate != null
+          ? `WR ${ev.data.win_rate.toFixed(1)}%`
+          : "";
+      const apps =
+        ev.data?.appearances != null ? `${ev.data.appearances} app` : "";
+      const stats = [wr, apps, `sample ${sample}`].filter(Boolean).join(", ");
+      lines.push(`  - ${ev.event_label}${verifiedTag}: ${stats}`);
+    }
+  }
+
+  // ── Resto do contexto vem da snapshot (estático) ─────────────────────────────
+  lines.push("");
+  lines.push(`Cores: ${arch.colors.join(", ")}`);
+  lines.push(`Estilo de jogo: ${arch.play_style_pt}`);
+  lines.push("");
+
+  if (arch.key_cards?.length > 0) {
+    lines.push("Key cards:");
+    for (const kc of arch.key_cards) {
+      const note = kc.note_pt ? ` — ${kc.note_pt}` : "";
+      lines.push(`  ${kc.code} ${kc.name} [${kc.role}]${note}`);
+    }
+    lines.push("");
+  }
+
+  // Matchups: usa da snapshot (tem dados detalhados; refatorar quando evidências cobrirem matchups)
+  if (arch.good_matchups?.length > 0) {
+    const good = arch.good_matchups
+      .map((m) => `${m.vs} (${m.win_rate_pct}%)`)
       .join(", ");
-    const eggCards = arch.example_decklist.egg
-      .map((c) => `${c.qty}×${c.code} ${c.name}`)
+    lines.push(`Matchups favoráveis: ${good}`);
+  }
+  if (arch.bad_matchups?.length > 0) {
+    const bad = arch.bad_matchups
+      .map((m) => `${m.vs} (${m.win_rate_pct}%)`)
       .join(", ");
+    lines.push(`Matchups difíceis: ${bad}`);
+  }
+  if (arch.good_matchups?.length > 0 || arch.bad_matchups?.length > 0) {
+    lines.push("");
+  }
+
+  // Decklist exemplo continua vindo da snapshot
+  if (arch.example_decklist) {
     const mainCount = arch.example_decklist.main.reduce(
       (s, c) => s + c.qty,
       0,
     );
-
     lines.push(`Decklist exemplo — ${arch.example_decklist.source}:`);
-    lines.push(`  Main (${mainCount} cartas): ${mainCards}`);
-    if (eggCards) lines.push(`  Egg: ${eggCards}`);
-    lines.push("");
-
-    lines.push(`Coach: ${arch.coach_notes_pt}`);
-    lines.push("");
-    lines.push("──────────────────────────────────────────────────────────────");
+    const mainCards = arch.example_decklist.main
+      .map((c) => `${c.qty}×${c.code} ${c.name}`)
+      .join(", ");
+    lines.push(`  Main (${mainCount}): ${mainCards}`);
+    if (arch.example_decklist.egg?.length > 0) {
+      const eggCards = arch.example_decklist.egg
+        .map((c) => `${c.qty}×${c.code} ${c.name}`)
+        .join(", ");
+      lines.push(`  Egg: ${eggCards}`);
+    }
     lines.push("");
   }
-  return lines;
+
+  lines.push(`Coach: ${arch.coach_notes_pt}`);
+  lines.push("");
+  lines.push("──────────────────────────────────────────────────────────────");
+  lines.push("");
+
+  return lines.join("\n");
 }
 
 /**
- * Formata os arquetipos como texto estruturado para o placeholder {{archetypes_context}}.
+ * Constrói o contexto completo de arquetipos para o placeholder {{archetypes_context}}.
+ *
+ * Agora async: cada arquetipo consulta evidências no DB em paralelo via Promise.all.
+ * Os campos win_rate_pct e meta_share_pct da snapshot são usados apenas como
+ * fallback histórico — a "verdade atual" vem das evidências em runtime.
  *
  * Seção 1 — META GLOBAL (sempre presente).
  * Seção 2 — META LOCAL (opcional; só renderiza se `localSnapshot` existe e tem arquetipos).
  */
-function formatArchetypesContext(
+async function buildArchetypesContext(
   globalContent: MetaSnapshotContent,
+  gameId: string,
   localSnapshot?: SnapshotRow | null,
-): string {
+): Promise<string> {
   const lines: string[] = [];
 
   if (globalContent.format) {
     lines.push(`Formato vigente: ${globalContent.format}`);
   }
-  if (globalContent.snapshot?.fetched_at) {
-    lines.push(`Dados de: ${globalContent.snapshot.fetched_at}`);
+
+  const snapshotDate = globalContent.snapshot?.fetched_at;
+  if (snapshotDate) {
+    lines.push(`Dados históricos de: ${snapshotDate}`);
+    lines.push(
+      `(Win rate e share abaixo são históricos quando sem evidências — meta atualizado vem das evidências em runtime)`,
+    );
   }
   if (globalContent.snapshot?.notes_pt) {
     lines.push(`Nota: ${globalContent.snapshot.notes_pt}`);
@@ -345,8 +428,16 @@ function formatArchetypesContext(
   lines.push("═══════════════════════════════════════");
   lines.push("   META GLOBAL");
   lines.push("═══════════════════════════════════════");
+  lines.push(`(${globalContent.archetypes?.length ?? 0} arquetipos)`);
   lines.push("");
-  lines.push(...renderArchetypeList(globalContent.archetypes ?? []));
+
+  // Processa todos os arquetipos em paralelo — cada um faz query de evidências
+  const archetypeBlocks = await Promise.all(
+    (globalContent.archetypes ?? []).map((arch) =>
+      buildArchetypeBlock(arch, gameId, snapshotDate),
+    ),
+  );
+  lines.push(...archetypeBlocks);
 
   // Bloco local — só renderiza se a snapshot local tiver arquetipos preenchidos
   if (localSnapshot) {
@@ -354,6 +445,8 @@ function formatArchetypesContext(
     const localArchetypes = localContent.archetypes ?? [];
     if (localArchetypes.length > 0) {
       const label = deriveLocalLabel(localSnapshot.version);
+      const localSnapshotDate = localContent.snapshot?.fetched_at;
+
       lines.push("═══════════════════════════════════════");
       lines.push(`   ${label}`);
       lines.push("═══════════════════════════════════════");
@@ -362,7 +455,13 @@ function formatArchetypesContext(
         lines.push(`Nota: ${localContent.snapshot.notes_pt}`);
         lines.push("");
       }
-      lines.push(...renderArchetypeList(localArchetypes));
+
+      const localBlocks = await Promise.all(
+        localArchetypes.map((arch) =>
+          buildArchetypeBlock(arch, gameId, localSnapshotDate),
+        ),
+      );
+      lines.push(...localBlocks);
     }
   }
 
@@ -507,12 +606,19 @@ export async function getPromptVariables(gameId: string): Promise<PromptVariable
 
   const globalContent = globalSnapshot.jsonContent as MetaSnapshotContent;
 
+  // buildArchetypesContext é async — busca evidências do DB em paralelo por arquetipo
+  const archetypes_context = await buildArchetypesContext(
+    globalContent,
+    gameId,
+    localSnapshot,
+  );
+
   return {
     game_name: game.name,
     game_card_code_pattern: gameConfig.card_code_pattern ?? "",
     game_card_code_examples: (gameConfig.card_code_examples ?? []).join(", "),
     game_deck_rules: formatDeckRules(gameConfig.deck_rules),
-    archetypes_context: formatArchetypesContext(globalContent, localSnapshot),
+    archetypes_context,
   };
 }
 
@@ -521,6 +627,7 @@ export async function getPromptVariables(gameId: string): Promise<PromptVariable
  * - Carrega game, prompt ativo, snapshot global e snapshot local (opcional) do DB (cache 60 s).
  * - Substitui {{placeholders}} no system template.
  * - Monta a mensagem do usuário com deck estruturado + cartas enriquecidas.
+ * - Injeta confiança e evidências em runtime por arquetipo (via buildArchetypesContext).
  *
  * Lança `PromptBuildError` (com statusHint) se o game ou a snapshot global não existirem.
  * A ausência de snapshot local não é erro — a análise continua só com o meta global.

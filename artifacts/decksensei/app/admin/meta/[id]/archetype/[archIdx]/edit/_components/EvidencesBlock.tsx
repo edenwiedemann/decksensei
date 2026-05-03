@@ -1,5 +1,5 @@
 import { pool } from "@workspace/db";
-import { computeArchetypeConfidence } from "@/lib/evidence/score";
+import { computeConfidenceScore } from "@/lib/evidence/score";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ function computeScore(evidences: EvidenceRow[]): {
     };
   });
 
-  const score = Math.round(computeArchetypeConfidence(inputs));
+  const score = Math.round(computeConfidenceScore(inputs));
 
   // Weighted win rate
   const withWR = evidences

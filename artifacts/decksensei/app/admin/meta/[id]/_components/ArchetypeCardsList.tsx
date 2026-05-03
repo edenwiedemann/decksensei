@@ -171,20 +171,26 @@ export default function ArchetypeCardsList({ snapshotId, archetypes: initial, is
                 )}
               </div>
 
-              {/* Stats */}
+              {/* Stats — WR e Share são valores históricos da snapshot */}
               <div className="flex items-center gap-3 text-xs">
-                <div className="flex flex-col items-center">
-                  <span className="text-base font-bold tabular-nums text-foreground">
+                <div
+                  className="flex flex-col items-center"
+                  title="Valor histórico — meta atualizado vem das evidências em runtime"
+                >
+                  <span className="text-base font-bold tabular-nums text-muted-foreground/50">
                     {arch.win_rate_pct}%
                   </span>
-                  <span className="text-muted-foreground/50">WR</span>
+                  <span className="text-muted-foreground/35">WR hist.</span>
                 </div>
                 <div className="h-8 w-px bg-border/40" />
-                <div className="flex flex-col items-center">
-                  <span className="text-base font-bold tabular-nums text-foreground">
+                <div
+                  className="flex flex-col items-center"
+                  title="Valor histórico — meta atualizado vem das evidências em runtime"
+                >
+                  <span className="text-base font-bold tabular-nums text-muted-foreground/50">
                     {arch.meta_share_pct}%
                   </span>
-                  <span className="text-muted-foreground/50">Share</span>
+                  <span className="text-muted-foreground/35">Share hist.</span>
                 </div>
                 {arch.record && (
                   <>
