@@ -1,0 +1,186 @@
+═══ PARTE 6 (REVISADA) — Coach lê SEMPRE das evidências, snapshot vira cosmética ═══
+
+Decisão de design: os campos win_rate_pct e meta_share_pct dentro de
+meta_snapshots.json_content.archetypes[] DEIXAM de ser fonte de verdade.
+Passam a ser apenas valores históricos do dia que a snapshot foi criada.
+A "verdade atual" do meta vem do agregado de evidências calculado em
+runtime via computeArchetypeConfidence.
+
+Por que: as evidências são atualizadas semanalmente pelo cron. A snapshot
+é uma foto fixa. Sem essa correção, o coach citaria números velhos da
+snapshot enquanto as evidências mostram realidade nova.
+
+Mudanças:
+
+1. Em lib/analysis-prompt.ts, refatora formatArchetypesContext (e renomeia
+   pra clareza) pra construir cada bloco de arquetipo da snapshot mas
+   SUBSTITUINDO os campos win_rate/share pelos valores derivados das
+   evidências em runtime:
+
+   async function buildArchetypeBlock(arch: SnapshotArchetype, gameId: string): Promise<string> {
+     const confidence = await computeArchetypeConfidence(gameId, arch.id);
+     const lines: string[] = [];
+     
+     lines.push(`=== ${arch.name_pt} ===`);
+     lines.push(`Tier: ${arch.tier}`);
+     
+     // ── Bloco de confidence (NOVO, substitui WR/share da snapshot) ──
+     if (confidence.evidences.length === 0) {
+       lines.push(`Confiança: 0/100 (sem evidências externas — dados apenas históricos)`);
+       lines.push(`WR histórico (snapshot ${arch.snapshot_date ?? "N/A"}): ${arch.win_rate_pct}%`);
+       lines.push(`Share histórico (snapshot): ${arch.meta_share_pct}%`);
+       lines.push(`AVISO: arquetipo sem evidências recentes. Trate como leitura provisória.`);
+     } else {
+       const conf = confidence.score;
+       const confLabel = conf >= 70 ? "alta" : conf >= 40 ? "média" : "baixa";
+       lines.push(`Confiança agregada: ${conf}/100 (${confLabel})`);
+       
+       if (confidence.weightedWinRate != null) {
+         lines.push(`Win rate ponderado: ${confidence.weightedWinRate.toFixed(1)}%`);
+         if (confidence.winRateRange && confidence.winRateRange[1] - confidence.winRateRange[0] > 5) {
+           lines.push(`Range observado entre fontes: ${confidence.winRateRange[0].toFixed(1)}% — ${confidence.winRateRange[1].toFixed(1)}% (sensibilidade alta)`);
+         }
+       }
+       
+       lines.push(`Sample combinado: ${confidence.totalSampleSize} partidas`);
+       lines.push("");
+       lines.push("Evidências (top 5 por relevância):");
+       
+       const sorted = [...confidence.evidences].sort((a, b) => {
+         // Ordena por relevância: source weight × recency × verification
+         const aScore = (a.sourceWeight ?? 0) * (a.recencyFactor ?? 1) * (a.verified ? 1 : 0.6);
+         const bScore = (b.sourceWeight ?? 0) * (b.recencyFactor ?? 1) * (b.verified ? 1 : 0.6);
+         return bScore - aScore;
+       }).slice(0, 5);
+       
+       for (const ev of sorted) {
+         const verifiedTag = ev.verified ? " ✓" : "";
+         const sample = ev.data?.sample_size ?? "N/A";
+         const wr = ev.data?.win_rate != null ? `WR ${ev.data.win_rate.toFixed(1)}%` : "";
+         const apps = ev.data?.appearances != null ? `${ev.data.appearances} app` : "";
+         const stats = [wr, apps, `sample ${sample}`].filter(Boolean).join(", ");
+         lines.push(`  - ${ev.event_label}${verifiedTag}: ${stats}`);
+       }
+     }
+     
+     // ── Resto do contexto vem da snapshot (estático): cores, plano, key cards, decklist exemplo, coach notes ──
+     lines.push("");
+     lines.push(`Cores: ${arch.colors.join(", ")}`);
+     lines.push(`Estilo de jogo: ${arch.play_style_pt}`);
+     lines.push("");
+     
+     if (arch.key_cards?.length > 0) {
+       lines.push("Key cards:");
+       for (const kc of arch.key_cards) {
+         const note = kc.note_pt ? ` — ${kc.note_pt}` : "";
+         lines.push(`  ${kc.code} ${kc.name} [${kc.role}]${note}`);
+       }
+       lines.push("");
+     }
+     
+     // Matchups: usa da snapshot por enquanto (snapshot tem matchups detalhados)
+     // Quando evidências cobrirem matchups completos, refatora pra puxar daí também
+     if (arch.good_matchups?.length > 0) {
+       const good = arch.good_matchups.map(m => `${m.vs} (${m.win_rate_pct}%)`).join(", ");
+       lines.push(`Matchups favoráveis: ${good}`);
+     }
+     if (arch.bad_matchups?.length > 0) {
+       const bad = arch.bad_matchups.map(m => `${m.vs} (${m.win_rate_pct}%)`).join(", ");
+       lines.push(`Matchups difíceis: ${bad}`);
+     }
+     lines.push("");
+     
+     // Decklist exemplo continua vindo da snapshot
+     if (arch.example_decklist) {
+       const mainCount = arch.example_decklist.main.reduce((s, c) => s + c.qty, 0);
+       lines.push(`Decklist exemplo — ${arch.example_decklist.source}:`);
+       const mainCards = arch.example_decklist.main.map(c => `${c.qty}×${c.code} ${c.name}`).join(", ");
+       lines.push(`  Main (${mainCount}): ${mainCards}`);
+       if (arch.example_decklist.egg?.length > 0) {
+         const eggCards = arch.example_decklist.egg.map(c => `${c.qty}×${c.code} ${c.name}`).join(", ");
+         lines.push(`  Egg: ${eggCards}`);
+       }
+       lines.push("");
+     }
+     
+     lines.push(`Coach: ${arch.coach_notes_pt}`);
+     lines.push("");
+     lines.push("──────────────────────────────────────────────────────────────");
+     lines.push("");
+     return lines.join("\n");
+   }
+
+2. Atualiza buildAnalysisPrompt pra processar arquetipos em paralelo (cada
+   um faz query de evidências, então paralelo acelera):
+
+   const archetypeBlocks = await Promise.all(
+     globalContent.archetypes.map(arch => buildArchetypeBlock(arch, gameId))
+   );
+   const archetypesContext = [
+     header + globalContent.archetypes count info,
+     ...archetypeBlocks,
+   ].join("\n");
+
+3. Pequenos ajustes em computeArchetypeConfidence (lib/evidence/score.ts)
+   pra retornar METADATA das evidências usadas no cálculo (sourceWeight,
+   recencyFactor) — não só o score final. Necessário pro buildArchetypeBlock
+   ordenar evidências por relevância:
+
+   return {
+     score,
+     weightedWinRate,
+     winRateRange,
+     totalSampleSize,
+     evidences: evidences.map(ev => ({
+       ...ev,
+       sourceWeight: sourceMap.get(ev.source_id)?.weight ?? 0,
+       recencyFactor: computeRecencyFactor(ev.event_date),
+     })),
+   };
+
+4. Cria nova versão de prompt (v3) com instrução atualizada de declarar
+   confidence — INSERT em prompts table com active=false. Filho ativa
+   manualmente depois de testar:
+
+   Texto adicional pro system prompt v3, depois das regras existentes:
+
+   ## Regra de honestidade sobre confiança dos dados
+
+   Cada arquetipo no contexto vem com campo "Confiança agregada: N/100".
+   Esse número representa a qualidade das evidências externas (torneios
+   oficiais Bandai, agregadores, reviews) que sustentam os dados desse
+   arquetipo.
+
+   Quando você comparar o deck do user com qualquer arquetipo:
+
+   - **Confiança ≥ 70 (alta):** trate os números (WR, share, matchups) como
+     leitura sólida. Cite-os com confiança. Ex: "Royal Knights tem WR 54%
+     bem documentado (Worlds + Regionals + Limitless)."
+
+   - **Confiança 40-69 (média):** cite com qualificador. Ex: "Os dados
+     atuais sugerem WR de 56% pra Megidramon, mas a sample ainda é parcial
+     (300 partidas, 1 torneio oficial)."
+
+   - **Confiança < 40 (baixa):** NUNCA cite WR como fato. Use linguagem
+     exploratória: "Esse arquetipo está em observação — tem aparecido em
+     comunidade mas sem confirmação de torneio oficial. Trate como
+     direcional, não como verdade."
+
+   - **Sem evidências externas (Confiança 0):** o arquetipo só tem dados
+     históricos da snapshot. Diga explicitamente: "Os números deste
+     arquetipo são da última atualização manual e podem estar desatualizados."
+
+   - **Range amplo entre fontes (> 5 pontos de WR):** mencione o range.
+     Ex: "WR varia entre 51% e 58% dependendo da fonte — provavelmente
+     reflete diferenças entre meta de torneios oficiais e meta de
+     comunidade."
+
+   Essa honestidade não é opcional. É o que diferencia este coach de
+   wrappers genéricos de IA.
+
+5. NÃO altera meta_share_pct nem win_rate_pct na snapshot ativa. Esses
+   campos viram apenas referência histórica — admin /admin/meta mostra
+   eles em CINZA com tooltip "valor histórico — meta atualizado vem das
+   evidências em runtime".
+
+═══ Ace

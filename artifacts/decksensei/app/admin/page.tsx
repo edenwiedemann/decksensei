@@ -81,6 +81,8 @@ export default async function AdminDashboardPage({
     { href: `/admin/prompts?game=${currentGame}`,     label: "Prompts",     desc: "Versões de prompt por jogo",           icon: "✏️" },
     { href: `/admin/meta?game=${currentGame}`,        label: "Meta global", desc: "Snapshots e arquetipos do meta",       icon: "🌐" },
     { href: `/admin/meta-recife?game=${currentGame}`, label: "Meta Recife", desc: "Ajustes locais do meta de Recife",     icon: "🦀" },
+    { href: `/admin/pipelines`,                       label: "Pipelines",   desc: "Status e histórico de coleta de dados",icon: "⚙️" },
+    { href: `/admin/evidences`,                       label: "Evidências",  desc: "Curadoria e verificação de evidências",icon: "🔍" },
   ];
 
   return (

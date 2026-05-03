@@ -5,6 +5,7 @@ import { requireAdminCookie } from "@/lib/auth/admin";
 import type { MetaArchetype } from "@/lib/analysis-prompt";
 import { toFormArchetype } from "@/app/admin/meta/_lib/types";
 import ArchetypeEditForm from "./_components/ArchetypeEditForm";
+import EvidencesBlock from "./_components/EvidencesBlock";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -80,6 +81,10 @@ export default async function ArchetypeEditPage({
           initialData={formArch}
           otherArchetypes={otherArchetypes}
           gameId={snap.game_id}
+        />
+        <EvidencesBlock
+          gameId={snap.game_id}
+          archetypeId={formArch.id ?? ""}
         />
       </main>
     </div>

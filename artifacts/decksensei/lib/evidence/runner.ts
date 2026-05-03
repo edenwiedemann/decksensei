@@ -1,4 +1,4 @@
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { pipelineHealthTable } from "@workspace/db";
 import { sendPipelineAlert } from "./alert";
 import type { EvidencePipeline } from "./types";
@@ -7,6 +7,7 @@ import type { EvidencePipeline } from "./types";
  * Orquestrador de pipelines de evidências.
  *
  * Fluxo:
+ *  0. Verifica se a pipeline está pausada — se sim, retorna "skipped".
  *  1. Valida o fingerprint da fonte (estrutura, acessibilidade).
  *  2. Se inválido → salva status "broken" no DB + envia alerta.
  *  3. Se válido → executa a importação.
@@ -17,6 +18,22 @@ export async function runPipeline(pipeline: EvidencePipeline): Promise<{
   status: "ok" | "broken" | "import_error" | "skipped";
   details: unknown;
 }> {
+  // Passo 0: verifica pausa — a row mais recente com status="paused" pausa o source
+  try {
+    const pauseCheck = await pool.query<{ status: string }>(
+      `SELECT status FROM pipeline_health
+       WHERE source_id = $1
+       ORDER BY detected_at DESC
+       LIMIT 1`,
+      [pipeline.sourceId],
+    );
+    if (pauseCheck.rows[0]?.status === "paused") {
+      return { status: "skipped", details: "paused" };
+    }
+  } catch {
+    // Falha silenciosa — se não conseguir checar, continua normalmente
+  }
+
   const validation = await pipeline.validateFingerprint();
 
   if (!validation.ok) {
