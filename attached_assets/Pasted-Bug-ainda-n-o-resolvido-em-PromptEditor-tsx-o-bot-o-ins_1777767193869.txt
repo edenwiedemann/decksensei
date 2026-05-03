@@ -1,0 +1,59 @@
+Bug ainda não resolvido em PromptEditor.tsx: o botão "inserir" dos campos
+disponíveis NÃO insere na posição do cursor — sempre adiciona no fim do
+prompt (geralmente fora da viewport, parece que nada aconteceu).
+
+Causa raiz: o useEffect atual procura a textarea no mount:
+
+  useEffect(() => {
+    const ta = document.querySelector<HTMLTextAreaElement>(".w-md-editor-text-input");
+    if (!ta) return;  // ← dispara aqui SEMPRE
+    ...
+  }, []);
+
+Como o MDEditor é dynamic({ ssr: false }), ele não está no DOM no momento
+que o effect roda. O querySelector retorna null, o early return executa, e
+o listener nunca é registrado. Resultado: lastCursorRef.current permanece
+null pra sempre, e insertVariable cai no fallback `prev + tag` (insere no
+fim).
+
+Solução: registra o listener no `document` (não na textarea) e dentro do
+handler verifica se o activeElement é a textarea do MDEditor. Assim funciona
+independentemente de quando a textarea foi montada.
+
+Substitui o useEffect inteiro por:
+
+  useEffect(() => {
+    const handler = () => {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement &&
+        active.classList.contains("w-md-editor-text-input")
+      ) {
+        lastCursorRef.current = {
+          start: active.selectionStart ?? 0,
+          end: active.selectionEnd ?? 0,
+        };
+      }
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
+
+O selectionchange é um evento global do document — não precisa estar ligado
+a um elemento específico. Quando o usuário digita ou move o cursor na
+textarea (que pode aparecer 100ms depois do mount), o handler captura a
+posição atual.
+
+Teste de aceitação: 
+1. Abre /admin/prompts/[id]/edit
+2. Clica DENTRO do editor de prompt no meio do texto, posiciona cursor
+3. Clica "inserir" em qualquer campo (ex: Nome do jogo)
+4. A variável {{game_name}} deve aparecer EXATAMENTE onde o cursor estava,
+   não no fim do prompt.
+
+Adicionalmente, no botão "inserir" mantém o onMouseDown existente (que já
+está correto) — sem essa linha, o click no botão tira foco da textarea
+ANTES do selectionchange disparar, e a posição perde-se 1 frame antes da
+captura. Os dois fixes são complementares.
+
+Roda typecheck pra confirmar.

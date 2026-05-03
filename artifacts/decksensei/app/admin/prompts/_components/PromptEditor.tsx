@@ -111,15 +111,15 @@ export default function PromptEditor({
   const lastCursorRef = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
-    const ta = document.querySelector<HTMLTextAreaElement>(
-      ".w-md-editor-text-input",
-    );
-    if (!ta) return;
     const handler = () => {
-      if (document.activeElement === ta) {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement &&
+        active.classList.contains("w-md-editor-text-input")
+      ) {
         lastCursorRef.current = {
-          start: ta.selectionStart ?? 0,
-          end: ta.selectionEnd ?? 0,
+          start: active.selectionStart ?? 0,
+          end: active.selectionEnd ?? 0,
         };
       }
     };
