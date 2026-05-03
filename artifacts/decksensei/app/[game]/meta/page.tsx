@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { unstable_cache } from "next/cache";
 import { pool } from "@workspace/db";
+import type { Metadata } from "next";
 import type { MetaArchetype } from "@/lib/analysis-prompt";
 
 interface PageParams {
@@ -17,7 +19,7 @@ interface GameRow {
   name: string;
 }
 
-async function getData(game: string) {
+async function fetchData(game: string) {
   const [snapResult, gameResult] = await Promise.all([
     pool.query<SnapRow>(
       `SELECT game_id, version, created_at::text, json_content
@@ -32,6 +34,57 @@ async function getData(game: string) {
     ),
   ]);
   return { snap: snapResult.rows[0] ?? null, gameName: gameResult.rows[0]?.name ?? game };
+}
+
+function getData(game: string) {
+  return unstable_cache(
+    () => fetchData(game),
+    [`meta-snapshot-${game}`],
+    { revalidate: 600, tags: [`meta-snapshot-${game}`] },
+  )();
+}
+
+export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
+  const { game } = await params;
+  const { snap, gameName } = await getData(game);
+
+  if (!snap) {
+    return { title: `Meta ${gameName} — Deck Sensei` };
+  }
+
+  const archetypes: MetaArchetype[] = snap.json_content?.archetypes ?? [];
+  const archetypeCount = archetypes.length;
+  const date = new Date(snap.created_at).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const title = `Meta ${gameName} · Snapshot ${snap.version} — Deck Sensei`;
+  const description = `Tier list atualizada de ${gameName} com ${archetypeCount} arquétipos, win rates e notas do coach. Snapshot ${snap.version} · ${date}.`;
+  const url = `https://decksensei.com.br/${game}/meta`;
+  const ogImage = `https://decksensei.com.br/opengraph.jpg`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: "Deck Sensei",
+      type: "website",
+      locale: "pt_BR",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+    },
+    alternates: { canonical: url },
+  };
 }
 
 const TIER_ORDER = ["S", "A", "B", "C", "D"];
