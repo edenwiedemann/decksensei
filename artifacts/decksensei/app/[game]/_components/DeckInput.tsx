@@ -57,6 +57,11 @@ interface AnalysisState {
   /** ID da análise salva no DB (nanoid 24), vindo do header X-Analysis-Id. */
   analysisId: string;
   /**
+   * Progresso do enriquecimento de cartas.
+   * null enquanto a fase de enrichment não começou.
+   */
+  enrichProgress: { done: number; total: number } | null;
+  /**
    * Percentual de cartas enriquecidas com sucesso (0–100).
    * null = ainda não recebido (antes da resposta do servidor).
    */
@@ -75,6 +80,7 @@ const IDLE: AnalysisState = {
   validationErrors: [],
   colorMap: {},
   analysisId: "",
+  enrichProgress: null,
   enrichmentPct: null,
   retryAfterSec: 0,
 };
@@ -208,8 +214,6 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
 
     try {
       // ── Enriquecer cartas via API externa ─────────────────────────────
-      setAnalysis({ ...IDLE, phase: "enriching" });
-
       const allCards: ParsedCard[] = [
         ...parsed.mainDeck,
         ...Object.values(parsed.auxDecks).flat(),
@@ -228,10 +232,26 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         Awaited<ReturnType<typeof cardApi.fetchCard>>
       >();
 
+      // Inicia fase 1 com contador 0/total
+      const enrichTotal = uniqueCards.length;
+      let enrichDone = 0;
+      setAnalysis({
+        ...IDLE,
+        phase: "enriching",
+        enrichProgress: { done: 0, total: enrichTotal },
+      });
+
       await Promise.all(
         uniqueCards.map(async (card) => {
           const data = await cardApi.fetchCard(card.cardCode);
           enrichedMap.set(card.cardCode, data);
+          enrichDone += 1;
+          const snapshot = enrichDone;
+          setAnalysis((prev) => ({
+            ...prev,
+            phase: "enriching" as const,
+            enrichProgress: { done: snapshot, total: enrichTotal },
+          }));
         }),
       );
 
@@ -365,7 +385,7 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
 
   const { phase } = analysis;
   const isAnalyzing = phase === "enriching" || phase === "streaming";
-  const showStream = phase === "streaming" || phase === "done";
+  const showAnalysisArea = phase === "enriching" || phase === "streaming" || phase === "done";
   const isRateLimited = phase === "error" && analysis.retryAfterSec > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -459,14 +479,6 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         </div>
       )}
 
-      {/* Indicador de enriquecimento de cartas */}
-      {phase === "enriching" && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-pulse" />
-          Buscando dados das cartas...
-        </div>
-      )}
-
       {/* Erros de validação do deck — tom de coach, lista estruturada */}
       {phase === "error" && analysis.validationErrors.length > 0 && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3">
@@ -538,27 +550,30 @@ export default function DeckInput({ placeholder, gameConfig, featuredAnalysis, a
         </>
       )}
 
-      {/* Banner de cobertura de enriquecimento */}
-      {showStream && analysis.enrichmentPct !== null && analysis.enrichmentPct < 100 && (
-        <div
-          className={
-            analysis.enrichmentPct < 50
-              ? "rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300/90"
-              : "rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
-          }
-        >
-          Análise gerada com{" "}
-          <span className="font-semibold tabular-nums">{analysis.enrichmentPct}%</span>{" "}
-          de cobertura de cartas.
-        </div>
-      )}
+      {/* Banner de cobertura de enriquecimento — só pós-streaming */}
+      {(phase === "streaming" || phase === "done") &&
+        analysis.enrichmentPct !== null &&
+        analysis.enrichmentPct < 100 && (
+          <div
+            className={
+              analysis.enrichmentPct < 50
+                ? "rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300/90"
+                : "rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+            }
+          >
+            Análise gerada com{" "}
+            <span className="font-semibold tabular-nums">{analysis.enrichmentPct}%</span>{" "}
+            de cobertura de cartas.
+          </div>
+        )}
 
-      {/* Divider + análise em stream */}
-      {showStream && (
+      {/* Área de análise — fases 1, 2 e 3 */}
+      {showAnalysisArea && (
         <div className="border-t border-border/30 pt-4">
           <AnalysisStream
             text={analysis.text}
-            streaming={phase === "streaming"}
+            phase={phase as "enriching" | "streaming" | "done"}
+            enrichProgress={analysis.enrichProgress}
             colorMap={analysis.colorMap}
             analysisId={analysis.analysisId}
             gameId={gameConfig.id}
