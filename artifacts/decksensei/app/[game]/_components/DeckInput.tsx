@@ -106,7 +106,14 @@ export default function DeckInput({
     try {
       const saved = localStorage.getItem(`pending_deck_${gameConfig.id}`);
       if (saved) {
-        setDeck(saved);
+        try {
+          const parsed = JSON.parse(saved) as { deck?: string; deckName?: string; tournamentMode?: boolean };
+          if (parsed.deck) setDeck(parsed.deck);
+          if (parsed.deckName) setDeckName(parsed.deckName);
+          if (parsed.tournamentMode) setTournamentMode(parsed.tournamentMode);
+        } catch {
+          setDeck(saved);
+        }
         setPendingResume(true);
         localStorage.removeItem(`pending_deck_${gameConfig.id}`);
       }
@@ -359,7 +366,7 @@ export default function DeckInput({
         const bodyTyped = body as { error?: string; message_pt?: string; retryAfterSec?: number } | null;
 
         if (res.status === 401 && bodyTyped?.error === "auth_required") {
-          try { localStorage.setItem(`pending_deck_${gameConfig.id}`, deck); } catch {}
+          try { localStorage.setItem(`pending_deck_${gameConfig.id}`, JSON.stringify({ deck, deckName: deckName.trim() || null, tournamentMode })); } catch {}
           setAnalysis(IDLE);
           setShowAuthModal(true);
           return;

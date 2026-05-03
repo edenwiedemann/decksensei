@@ -149,7 +149,9 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
               ? `${analysis.deckName} — Análise`
               : analysis.similarArchetypeId
                 ? `${analysis.similarArchetypeId}${grade ? ` — Deck ${grade.grade}` : ""}`
-                : `Análise de ${analysis.gameName}`}
+                : grade
+                  ? `Deck ${grade.grade} — ${analysis.gameName}`
+                  : `Análise de ${analysis.gameName}`}
           </h1>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
