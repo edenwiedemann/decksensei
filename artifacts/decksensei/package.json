@@ -18,6 +18,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "drizzle-orm": "catalog:",
+    "html-to-image": "^1.11.13",
     "lucide-react": "catalog:",
     "nanoid": "^5.1.5",
     "next": "^15.3.0",

@@ -112,8 +112,23 @@ export default async function SharedAnalysisPage({ params }: PageParams) {
         <span className="ml-auto text-xs text-muted-foreground">{date}</span>
       </header>
 
+      {/* Sticky bottom CTA */}
+      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-2xl items-center gap-4 px-6 py-3">
+          <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
+            Quer analisar o seu próprio deck?
+          </p>
+          <a
+            href={`/${game}`}
+            className="ml-auto inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+          >
+            Analisar meu deck grátis →
+          </a>
+        </div>
+      </div>
+
       {/* Conteúdo */}
-      <main className="mx-auto max-w-2xl px-6 py-12 pb-24">
+      <main className="mx-auto max-w-2xl px-6 py-12 pb-28">
         {/* Badge read-only */}
         <div className="mb-6 flex items-center gap-2">
           <span className="inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">

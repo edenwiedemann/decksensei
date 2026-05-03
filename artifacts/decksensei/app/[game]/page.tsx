@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import {
   db,
+  pool,
   analysesTable,
   gamesTable,
   metaSnapshotsTable,
@@ -75,7 +76,7 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
   const { resume } = await searchParams;
   const autoResume = resume === "true";
 
-  const [gameResults, featured, metaSnapshotRows] = await Promise.all([
+  const [gameResults, featured, metaSnapshotRows, weeklyCountResult] = await Promise.all([
     db.select().from(gamesTable).where(eq(gamesTable.id, game)).limit(1),
     getCachedFeaturedAnalysis(game),
     db
@@ -83,12 +84,18 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
       .from(metaSnapshotsTable)
       .where(and(eq(metaSnapshotsTable.gameId, game), eq(metaSnapshotsTable.active, true)))
       .limit(1),
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM analyses WHERE game_id = $1 AND deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days'`,
+      [game],
+    ),
   ]);
 
   const gameData = gameResults[0];
   if (!gameData) notFound();
 
   // Dias desde o último snapshot de meta ativo (para badge de aviso)
+  const weeklyAnalysisCount = parseInt(weeklyCountResult.rows[0]?.count ?? "0", 10);
+
   const metaSnapshotAgeDays = metaSnapshotRows[0]?.createdAt
     ? Math.floor((Date.now() - metaSnapshotRows[0].createdAt.getTime()) / 86_400_000)
     : undefined;
@@ -122,7 +129,13 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
         <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/25">
           {badgeLabel}
         </span>
-        <nav className="ml-auto">
+        <nav className="ml-auto flex items-center gap-4">
+          <a
+            href={`/${game}/meta`}
+            className="text-sm text-muted-foreground/50 hover:text-foreground transition-colors"
+          >
+            Meta
+          </a>
           <a
             href={`/${game}/historico`}
             className="text-sm text-muted-foreground/50 hover:text-foreground transition-colors"
@@ -154,6 +167,15 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
             completa: plano de jogo, pontos fortes, vulnerabilidades e sugestões
             de troca baseadas no meta atual.
           </p>
+
+          {weeklyAnalysisCount >= 5 && (
+            <p className="mt-5 text-sm text-muted-foreground/50">
+              <span className="font-semibold text-primary/70">
+                {weeklyAnalysisCount.toLocaleString("pt-BR")}
+              </span>{" "}
+              análises feitas essa semana
+            </p>
+          )}
         </div>
       </section>
 

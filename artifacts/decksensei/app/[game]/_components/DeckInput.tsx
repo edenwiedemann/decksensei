@@ -92,8 +92,12 @@ export default function DeckInput({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingResume, setPendingResume] = useState(false);
   const [countdownSec, setCountdownSec] = useState(0);
+  const [tournamentMode, setTournamentMode] = useState(false);
+  const [usageCount, setUsageCount] = useState<{ used: number; limit: number; isAuthenticated: boolean } | null>(null);
+  const [canPaste, setCanPaste] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const analysisAreaRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-resume após magic-link ───────────────────────────────────────────
   useEffect(() => {
@@ -171,6 +175,28 @@ export default function DeckInput({
     };
     document.title = PHASE_TITLES[analysis.phase] ?? "Deck Sensei";
     return () => { document.title = "Deck Sensei"; };
+  }, [analysis.phase]);
+
+  // ── Busca uso atual na API (anon: limite de 5 por hora) ──────────────────
+  useEffect(() => {
+    fetch("/api/my-usage")
+      .then((r) => r.json() as Promise<{ used: number; limit: number; isAuthenticated: boolean }>)
+      .then(setUsageCount)
+      .catch(() => {});
+  }, []);
+
+  // ── Verifica suporte a clipboard.readText (principalmente mobile) ─────────
+  useEffect(() => {
+    setCanPaste(typeof navigator !== "undefined" && "clipboard" in navigator && "readText" in navigator.clipboard);
+  }, []);
+
+  // ── Auto-scroll para área de análise quando inicia ────────────────────────
+  useEffect(() => {
+    if (analysis.phase === "enriching") {
+      setTimeout(() => {
+        analysisAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+    }
   }, [analysis.phase]);
 
   // ── Countdown de rate limit ───────────────────────────────────────────────
@@ -319,7 +345,7 @@ export default function DeckInput({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: abort.signal,
-          body: JSON.stringify({ gameId: gameConfig.id, deck: parsed, enrichedCards }),
+          body: JSON.stringify({ gameId: gameConfig.id, deck: parsed, enrichedCards, tournamentMode }),
         });
       } catch (fetchErr) {
         if ((fetchErr as { name?: string }).name === "AbortError") return;
@@ -416,6 +442,24 @@ export default function DeckInput({
             className="ml-3 shrink-0 rounded px-2 py-1 text-muted-foreground hover:text-foreground transition-colors hover:bg-border/30"
           >
             Limpar
+          </button>
+        </div>
+      )}
+
+      {/* Colar da área de transferência — útil no mobile */}
+      {canPaste && phase === "idle" && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text.trim()) handleDeckChange(text);
+              } catch {}
+            }}
+            className="text-xs text-muted-foreground/40 transition-colors hover:text-muted-foreground/70"
+          >
+            ↓ Colar da área de transferência
           </button>
         </div>
       )}
@@ -519,6 +563,27 @@ export default function DeckInput({
                 <span className="text-xs text-muted-foreground/50 hidden sm:block">ou ⌘↵</span>
               )}
             </div>
+
+            {/* Modo torneio + uso restante */}
+            {phase === "idle" && (
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer select-none items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={tournamentMode}
+                    onChange={(e) => setTournamentMode(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border/50 accent-primary"
+                  />
+                  <span className="text-xs text-muted-foreground/60">Modo torneio</span>
+                </label>
+                {usageCount && !usageCount.isAuthenticated && (
+                  <span className="ml-auto text-xs text-muted-foreground/40 tabular-nums">
+                    {usageCount.used}/{usageCount.limit} análises usadas
+                  </span>
+                )}
+              </div>
+            )}
+
             {phase === "idle" && featuredAnalysis && (
               <button
                 type="button"
@@ -562,7 +627,7 @@ export default function DeckInput({
 
       {/* Área de análise */}
       {showAnalysisArea && (
-        <div className="border-t border-border/30 pt-4">
+        <div ref={analysisAreaRef} className="border-t border-border/30 pt-4">
           <AnalysisStream
             text={analysis.text}
             phase={phase as "enriching" | "streaming" | "done"}

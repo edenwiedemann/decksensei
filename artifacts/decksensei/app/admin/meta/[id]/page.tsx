@@ -6,6 +6,7 @@ import type { MetaArchetype } from "@/lib/analysis-prompt";
 import SnapshotActions from "./_components/SnapshotActions";
 import ArchetypeCardsList from "./_components/ArchetypeCardsList";
 import ActiveSnapshotBanner from "./_components/ActiveSnapshotBanner";
+import NotifyUsersButton from "./_components/NotifyUsersButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,12 +65,15 @@ export default async function SnapshotDetailPage({
             </span>
           )}
         </div>
-        <SnapshotActions
-          snapshotId={snap.id}
-          isActive={snap.active}
-          gameId={snap.game_id}
-          currentVersion={snap.version}
-        />
+        <div className="flex items-center gap-3">
+          {snap.active && <NotifyUsersButton snapshotId={snap.id} />}
+          <SnapshotActions
+            snapshotId={snap.id}
+            isActive={snap.active}
+            gameId={snap.game_id}
+            currentVersion={snap.version}
+          />
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">

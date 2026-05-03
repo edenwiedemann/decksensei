@@ -14,6 +14,9 @@ import {
   Copy,
   Check,
   Link,
+  Info,
+  ThumbsUp,
+  ThumbsDown,
   type LucideIcon,
 } from "lucide-react";
 import { sectionSlug } from "@/lib/deck-score";
@@ -98,17 +101,45 @@ const GRADE_STYLES = {
 
 function DeckScoreBadge({ grade, pct }: { grade: "A" | "B" | "C" | "D"; pct: number }) {
   const s = GRADE_STYLES[grade];
+  const [showInfo, setShowInfo] = useState(false);
   return (
-    <div className={`flex items-center gap-4 rounded-xl border ${s.border} ${s.bg} px-5 py-4`}>
+    <div className={`relative flex items-center gap-4 rounded-xl border ${s.border} ${s.bg} px-5 py-4`}>
       <span className={`text-4xl font-black tabular-nums leading-none ${s.text}`}>
         {grade}
       </span>
-      <div>
+      <div className="flex-1">
         <p className={`text-sm font-bold ${s.text}`}>{s.label}</p>
         <p className="text-xs text-muted-foreground">
           {pct}% de similaridade com o arquetipo mais próximo do meta
         </p>
       </div>
+      <button
+        type="button"
+        onClick={() => setShowInfo((v) => !v)}
+        className="shrink-0 rounded-full p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground/80"
+        aria-label="Entenda o score"
+        title="Como o score é calculado"
+      >
+        <Info className="h-4 w-4" />
+      </button>
+      {showInfo && (
+        <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-border/50 bg-card p-4 shadow-xl">
+          <p className="mb-2 text-xs font-semibold text-foreground">Como o score é calculado</p>
+          <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+            Comparamos seu deck com os arquétipos do meta e medimos a{" "}
+            <span className="text-foreground">% de similaridade</span> de cartas com o mais próximo.
+          </p>
+          <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+            <li><span className="font-bold text-emerald-400">A</span> — ≥ 80% · muito próximo do meta</li>
+            <li><span className="font-bold text-sky-400">B</span> — 65–79% · sólido e competitivo</li>
+            <li><span className="font-bold text-amber-400">C</span> — 50–64% · funcional, com margem</li>
+            <li><span className="font-bold text-rose-400">D</span> — &lt; 50% · iniciante ou fora do meta</li>
+          </ul>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/60">
+            Score alto não é obrigatório — um D bem executado pode bater um A!
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -343,14 +374,34 @@ interface SectionCardProps {
   isLast: boolean;
   streaming: boolean;
   colorMap: Record<string, string>;
+  analysisId?: string;
 }
 
-function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps) {
+function SectionCard({ section, isLast, streaming, colorMap, analysisId }: SectionCardProps) {
   const meta = SECTION_META[section.title] ?? DEFAULT_META;
   const Icon = meta.icon;
   const showCursor = isLast && streaming;
   const [sectionCopied, setSectionCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [sectionRating, setSectionRating] = useState<"up" | "down" | null>(null);
+
+  async function handleSectionRating(rating: "up" | "down") {
+    if (sectionRating !== null || !analysisId) return;
+    setSectionRating(rating);
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysisId,
+          rating,
+          comment: `[section:${sectionSlug(section.title)}]`,
+        }),
+      });
+    } catch {
+      // best-effort — não revertemos o estado visual
+    }
+  }
 
   async function handleLinkCopy() {
     try {
@@ -474,6 +525,40 @@ function SectionCard({ section, isLast, streaming, colorMap }: SectionCardProps)
         </h2>
         {!streaming && (
           <div className="ml-auto flex items-center gap-0.5">
+            {/* Feedback por seção */}
+            {analysisId && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleSectionRating("up")}
+                  disabled={sectionRating !== null}
+                  className={`rounded p-1.5 transition-colors ${
+                    sectionRating === "up"
+                      ? "text-emerald-400"
+                      : "text-muted-foreground/20 hover:text-emerald-400/70"
+                  } disabled:pointer-events-none`}
+                  aria-label="Seção útil"
+                  title="Seção útil"
+                >
+                  <ThumbsUp className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSectionRating("down")}
+                  disabled={sectionRating !== null}
+                  className={`rounded p-1.5 transition-colors ${
+                    sectionRating === "down"
+                      ? "text-amber-400"
+                      : "text-muted-foreground/20 hover:text-amber-400/70"
+                  } disabled:pointer-events-none`}
+                  aria-label="Seção não útil"
+                  title="Seção não útil"
+                >
+                  <ThumbsDown className="h-3 w-3" />
+                </button>
+                <span className="mx-1 h-3.5 w-px bg-border/40" />
+              </>
+            )}
             <button
               onClick={handleLinkCopy}
               className="rounded p-1.5 text-muted-foreground/20 transition-colors hover:text-muted-foreground/60"
@@ -514,6 +599,39 @@ const EXPECTED_HEADERS = [
   "## Comparação com o meta",
   "## Sugestões de troca",
 ];
+
+// ─── CopyAllButton ────────────────────────────────────────────────────────────
+
+function CopyAllButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      const clean = text
+        .replace(/```sugestoes[\s\S]*?```/g, "")
+        .replace(/```[\s\S]*?```/g, "")
+        .trim();
+      await navigator.clipboard.writeText(clean);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:border-border/70 hover:text-muted-foreground"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-emerald-400" />
+      ) : (
+        <Copy className="h-3 w-3" />
+      )}
+      {copied ? "Copiado!" : "Copiar tudo"}
+    </button>
+  );
+}
 
 // ─── FallbackProse ────────────────────────────────────────────────────────────
 
@@ -572,6 +690,11 @@ export default function AnalysisResult({ text, streaming, colorMap, analysisId }
       {deckScore && (
         <DeckScoreBadge grade={deckScore.grade} pct={deckScore.pct} />
       )}
+      {!streaming && (
+        <div className="flex justify-end">
+          <CopyAllButton text={text} />
+        </div>
+      )}
       {sections.map((section, i) => (
         <SectionCard
           key={section.title || i}
@@ -579,6 +702,7 @@ export default function AnalysisResult({ text, streaming, colorMap, analysisId }
           isLast={i === sections.length - 1}
           streaming={streaming}
           colorMap={colorMap}
+          analysisId={analysisId}
         />
       ))}
 

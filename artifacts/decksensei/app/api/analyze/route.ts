@@ -205,12 +205,14 @@ export async function POST(request: NextRequest) {
   let gameId: string;
   let deck: ParsedDeck;
   let enrichedCards: EnrichedCard[];
+  let tournamentMode = false;
 
   try {
     const body = (await request.json()) as {
       gameId?: unknown;
       deck?: unknown;
       enrichedCards?: unknown;
+      tournamentMode?: unknown;
     };
 
     if (typeof body.gameId !== "string" || !body.gameId) {
@@ -225,6 +227,7 @@ export async function POST(request: NextRequest) {
     enrichedCards = Array.isArray(body.enrichedCards)
       ? (body.enrichedCards as EnrichedCard[])
       : [];
+    tournamentMode = body.tournamentMode === true;
   } catch {
     return Response.json({ error: "Body inválido" }, { status: 400 });
   }
@@ -285,7 +288,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── 3c. Mapa de cores dos arquetipos para o frontend ──────────────────
+  // ── 3c. Injeta modo torneio no último user message ───────────────────
+  if (tournamentMode && built.messages.length > 0) {
+    const lastMsg = built.messages[built.messages.length - 1];
+    if (lastMsg) {
+      const tournamentNote =
+        `\n\n**MODO TORNEIO ATIVO:** Além da análise padrão, priorize: ` +
+        `(1) análise detalhada de matchups contra os decks mais presentes no meta, ` +
+        `(2) sequência de mulligan recomendada, ` +
+        `(3) sugestões específicas de cartas para ambiente competitivo presencial.`;
+      built.messages[built.messages.length - 1] = {
+        ...lastMsg,
+        content: lastMsg.content + tournamentNote,
+      };
+    }
+  }
+
+  // ── 3d. Mapa de cores dos arquetipos para o frontend ──────────────────
   const colorMap: Record<string, string> = {};
   for (const arch of built.archetypes) {
     if (arch.colors[0]) colorMap[arch.name_pt] = arch.colors[0];
