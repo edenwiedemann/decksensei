@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { pool } from "@workspace/db";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getGames } from "@/lib/games/list";
+import GameSelector from "@/app/admin/_components/GameSelector";
 import CreateSnapshotButton from "@/app/admin/meta/_components/CreateSnapshotButton";
 
 export const dynamic = "force-dynamic";
@@ -36,12 +39,20 @@ async function getLocalSnapshots(gameId: string): Promise<SnapshotRow[]> {
   return r.rows;
 }
 
-export default async function MetaRecifeListPage() {
+export default async function MetaRecifeListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ game?: string }>;
+}) {
   await requireAdminCookie();
 
-  const gameId = "digimon";
+  const [sp, games] = await Promise.all([searchParams, getGames()]);
+  const gameId = sp.game ?? games[0]?.id;
+  if (!gameId) notFound();
+
   const snapshots = await getLocalSnapshots(gameId);
   const activeSnap = snapshots.find((s) => s.active);
+  const gameName = games.find((g) => g.id === gameId)?.label ?? gameId;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
@@ -51,18 +62,23 @@ export default async function MetaRecifeListPage() {
             ← Admin
           </Link>
           <span className="text-border/60">·</span>
-          <h1 className="text-base font-semibold text-foreground">Meta local — Recife</h1>
+          <h1 className="text-base font-semibold text-foreground">
+            Meta local — <span className="text-primary">{gameName}</span>
+          </h1>
         </div>
-        <CreateSnapshotButton
-          gameId={gameId}
-          activeSnapshotId={activeSnap?.id ?? null}
-          activeSnapshotVersion={activeSnap?.version ?? null}
-          scope="local"
-          redirectBase="/admin/meta"
-        />
+        <div className="flex items-center gap-3">
+          <GameSelector games={games} current={gameId} />
+          <CreateSnapshotButton
+            gameId={gameId}
+            activeSnapshotId={activeSnap?.id ?? null}
+            activeSnapshotVersion={activeSnap?.version ?? null}
+            scope="local"
+            redirectBase="/admin/meta"
+          />
+        </div>
       </header>
 
-      {/* Banner visual "META LOCAL — RECIFE" */}
+      {/* Banner visual "META LOCAL" */}
       <div className="border-b border-amber-500/20 bg-amber-950/10 px-6 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-3">
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-400">
@@ -78,7 +94,9 @@ export default async function MetaRecifeListPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         {snapshots.length === 0 ? (
           <div className="rounded-xl border border-border/40 bg-card/40 px-8 py-12 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma snapshot local cadastrada ainda.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhuma snapshot local cadastrada ainda para <strong>{gameName}</strong>.
+            </p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border/40 bg-card/40">

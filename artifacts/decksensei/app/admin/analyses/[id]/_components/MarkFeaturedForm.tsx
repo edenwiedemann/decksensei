@@ -59,7 +59,7 @@ export default function MarkFeaturedForm({
           required
           value={featuredPlayerName}
           onChange={(e) => setFeaturedPlayerName(e.target.value)}
-          placeholder="Nome do jogador (ex: nome do meu filho)"
+          placeholder="Nome do jogador (ex: João Silva)"
           className="h-8 rounded-md border border-border/40 bg-muted/20 px-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-border focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>

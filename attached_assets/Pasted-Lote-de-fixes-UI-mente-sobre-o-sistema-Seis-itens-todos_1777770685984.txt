@@ -1,0 +1,143 @@
+Lote de fixes "UI mente sobre o sistema". Seis itens, todos relacionados a
+hardcodes que travam o produto em modo single-game ou divergem do estado
+real do banco.
+
+═══ ITEM A: GameSelector funcional (controla a página inteira) ═══
+
+1. Em artifacts/decksensei/app/admin/_components/GameSelector.tsx, transforma
+   o componente em controlled. Aceita prop currentGame e usa next/navigation
+   pra trocar de jogo via query param ?game=...:
+
+   "use client";
+   import { useRouter, useSearchParams, usePathname } from "next/navigation";
+
+   interface Props { games: Array<{ id: string; label: string }>; current: string; }
+
+   export default function GameSelector({ games, current }: Props) {
+     const router = useRouter();
+     const pathname = usePathname();
+     const sp = useSearchParams();
+     return (
+       <select
+         value={current}
+         onChange={(e) => {
+           const params = new URLSearchParams(sp);
+           params.set("game", e.target.value);
+           router.push(`${pathname}?${params.toString()}`);
+         }}
+         className="..."
+       >
+         {games.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+       </select>
+     );
+   }
+
+2. No /app/admin/page.tsx (e demais páginas que renderizam GameSelector),
+   busca a lista real de jogos do banco:
+
+   async function getGames(): Promise<Array<{id: string; label: string}>> {
+     const r = await pool.query<{id: string; name: string}>(
+       "SELECT id, name FROM games ORDER BY name"
+     );
+     return r.rows.map(g => ({ id: g.id, label: g.name }));
+   }
+
+   E lê o currentGame do query param (default = primeiro jogo do banco):
+
+   const games = await getGames();
+   const currentGame = (await searchParams).game ?? games[0]?.id ?? "digimon";
+
+   <GameSelector games={games} current={currentGame} />
+
+═══ ITEM B: Remove os 4 gameId="digimon" hardcoded ═══
+
+3. Em /admin/prompts/page.tsx, /admin/prompts/new/page.tsx, /admin/meta/page.tsx
+   e /admin/meta-recife/page.tsx — remove a linha `const gameId = "digimon";`
+   e substitui por leitura do query param:
+
+   export default async function Page({
+     searchParams,
+   }: { searchParams: Promise<{ game?: string }> }) {
+     const sp = await searchParams;
+     const games = await getGames();
+     const gameId = sp.game ?? games[0]?.id;
+     if (!gameId) notFound();
+     ...
+   }
+
+   Move getGames pra um lib utility compartilhado tipo lib/games/list.ts
+   pra evitar duplicação.
+
+   Renderiza o GameSelector no header dessas páginas também (não só no
+   /admin) — assim a troca de jogo persiste na navegação.
+
+   Adiciona link "voltar pro jogo X" se usuário entrou via deep link com
+   ?game=lorcana mas não há lorcana no banco.
+
+═══ ITEM C: Routes admin sem fallback "digimon" ═══
+
+4. Em /api/admin/analyses/recent/route.ts: remove o `?? "digimon"`. Se gameId
+   não veio na query, retorna 400 com mensagem clara:
+
+   const gameId = searchParams.get("gameId");
+   if (!gameId) {
+     return Response.json({ error: "gameId é obrigatório" }, { status: 400 });
+   }
+
+5. Em /api/admin/meta/snapshots/route.ts (POST): mesma coisa no destructure.
+   Remove o default "digimon":
+
+   const { gameId, version, notes, copyFromId, scope = "global" } = body;
+   if (!gameId?.trim()) {
+     return Response.json({ error: "gameId é obrigatório" }, { status: 400 });
+   }
+
+═══ ITEM D: getAnalysesToday no fuso correto ═══
+
+6. Em /app/admin/page.tsx, função getAnalysesToday: troca a query pra usar
+   America/Sao_Paulo, igual ao getDailyCost:
+
+   const r = await pool.query<{ count: string }>(
+     `SELECT COUNT(*)::text AS count
+      FROM analyses
+      WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') =
+            DATE(NOW() AT TIME ZONE 'America/Sao_Paulo')
+        AND deleted_at IS NULL`,
+   );
+
+   Confirma visualmente que o dashboard agora reset todos os 4 cards no
+   mesmo horário (00h Recife).
+
+═══ ITEM E: Preview do PromptEditor com valores reais (já mandei prompt
+       específico antes — incluído aqui pra consolidar) ═══
+
+7. Implementa getPromptVariables(gameId) em lib/analysis-prompt.ts e passa
+   como prop realVariables pro PromptEditor. Detalhes no prompt anterior
+   sobre esse item.
+
+═══ ITEM F: Página /sobre ═══
+
+8. Cria /app/sobre/page.tsx (server component, sem auth). Voz do filho,
+   placeholder [NOME_FILHO]. Container max-w-2xl. Botões pros 3 canais da
+   comunidade. Detalhes no prompt anterior. Adiciona link "Sobre" no footer
+   da landing /[game]/page.tsx.
+
+═══ ITEM G: Texto cosmético do MarkFeaturedForm ═══
+
+9. Em /app/admin/analyses/[id]/_components/MarkFeaturedForm.tsx, troca o
+   placeholder de "Nome do jogador (ex: nome do meu filho)" por
+   "Nome do jogador (ex: João Silva)". Pequeno, mas afasta a impressão
+   de produto pra uso pessoal.
+
+═══ Aceitação ═══
+
+Roda pnpm typecheck e pnpm dev. Abre /admin. Testa:
+- GameSelector mostra os jogos reais do banco (1 hoje: Digimon).
+- Troca pra "Digimon" no selector — URL ganha ?game=digimon, página recarrega.
+- Insere row fake `INSERT INTO games (id, name, config) VALUES ('lorcana',
+  'Lorcana TCG', '{}'::jsonb);` no DB. GameSelector mostra Lorcana como opção.
+- Troca pra Lorcana — /admin/prompts mostra "nenhum prompt" (porque não tem
+  prompt pra lorcana ainda) em vez de mostrar prompt do digimon.
+- Os 4 cards do dashboard reset à meia-noite de Recife (não 21h).
+- /sobre renderiza com link no footer da landing.
+- Apaga a row de teste depois: DELETE FROM games WHERE id = 'lorcana';

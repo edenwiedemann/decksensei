@@ -2,6 +2,7 @@ import Link from "next/link";
 import { pool } from "@workspace/db";
 import { getDailyCost } from "@/lib/cost-tracker";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getGames } from "@/lib/games/list";
 import GameSelector from "./_components/GameSelector";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,8 @@ async function getAnalysesToday(): Promise<number> {
   const r = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM analyses
-     WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE
+     WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') =
+           DATE(NOW() AT TIME ZONE 'America/Sao_Paulo')
        AND deleted_at IS NULL`,
   );
   return parseInt(r.rows[0]?.count ?? "0", 10);
@@ -37,21 +39,18 @@ async function getPositiveFeedbackPct(): Promise<number | null> {
   return raw != null ? parseFloat(raw) : null;
 }
 
-// ─── Nav links ────────────────────────────────────────────────────────────────
-
-const NAV_LINKS = [
-  { href: "/admin/analyses",   label: "Análises",      desc: "Histórico e moderação de análises",       icon: "🗂" },
-  { href: "/admin/users",      label: "Usuários",      desc: "Cadastros, magic links e sessões",         icon: "👤" },
-  { href: "/admin/feedback",   label: "Feedback",      desc: "Avaliações up/down das análises",          icon: "⭐" },
-  { href: "/admin/prompts",    label: "Prompts",       desc: "Versões de prompt por jogo",               icon: "✏️" },
-  { href: "/admin/meta",       label: "Meta global",   desc: "Snapshots e arquetipos do meta",           icon: "🌐" },
-  { href: "/admin/meta-recife",label: "Meta Recife",   desc: "Ajustes locais do meta de Recife",         icon: "🦀" },
-];
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ game?: string }>;
+}) {
   await requireAdminCookie();
+
+  const [sp, games] = await Promise.all([searchParams, getGames()]);
+  const currentGame = sp.game ?? games[0]?.id ?? "digimon";
+
   const [totalUsers, analysesToday, feedbackPct, dailyCostUsd] =
     await Promise.all([
       getTotalUsers().catch(() => null),
@@ -71,6 +70,15 @@ export default async function AdminDashboardPage() {
         ? "bg-amber-400"
         : "bg-primary";
 
+  const NAV_LINKS = [
+    { href: `/admin/analyses`,              label: "Análises",    desc: "Histórico e moderação de análises",   icon: "🗂" },
+    { href: `/admin/users`,                 label: "Usuários",    desc: "Cadastros, magic links e sessões",    icon: "👤" },
+    { href: `/admin/feedback`,              label: "Feedback",    desc: "Avaliações up/down das análises",     icon: "⭐" },
+    { href: `/admin/prompts?game=${currentGame}`,    label: "Prompts",     desc: "Versões de prompt por jogo",          icon: "✏️" },
+    { href: `/admin/meta?game=${currentGame}`,       label: "Meta global", desc: "Snapshots e arquetipos do meta",      icon: "🌐" },
+    { href: `/admin/meta-recife?game=${currentGame}`,label: "Meta Recife", desc: "Ajustes locais do meta de Recife",    icon: "🦀" },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -87,7 +95,7 @@ export default async function AdminDashboardPage() {
             Deck Sensei Admin
           </h1>
         </div>
-        <GameSelector />
+        <GameSelector games={games} current={currentGame} />
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
@@ -102,7 +110,7 @@ export default async function AdminDashboardPage() {
           {/* Análises hoje */}
           <StatCard title="Análises hoje" icon="🗂">
             <BigNumber value={analysesToday} />
-            <p className="mt-1 text-xs text-muted-foreground">desde meia-noite UTC</p>
+            <p className="mt-1 text-xs text-muted-foreground">desde meia-noite (Recife)</p>
           </StatCard>
 
           {/* % feedback positivo 7d */}

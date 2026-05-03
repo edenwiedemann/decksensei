@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { pool } from "@workspace/db";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getGames } from "@/lib/games/list";
+import GameSelector from "../_components/GameSelector";
 import PromptRowActions from "./_components/PromptRowActions";
 
 export const dynamic = "force-dynamic";
@@ -46,11 +49,19 @@ async function getPrompts(gameId: string): Promise<PromptRow[]> {
   return r.rows;
 }
 
-export default async function PromptsListPage() {
+export default async function PromptsListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ game?: string }>;
+}) {
   await requireAdminCookie();
 
-  const gameId = "digimon";
+  const [sp, games] = await Promise.all([searchParams, getGames()]);
+  const gameId = sp.game ?? games[0]?.id;
+  if (!gameId) notFound();
+
   const prompts = await getPrompts(gameId);
+  const gameName = games.find((g) => g.id === gameId)?.label ?? gameId;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
@@ -65,23 +76,26 @@ export default async function PromptsListPage() {
           </Link>
           <span className="text-border/60">·</span>
           <h1 className="text-base font-semibold text-foreground">
-            Prompts — {gameId}
+            Prompts — <span className="text-primary">{gameName}</span>
           </h1>
         </div>
-        <Link
-          href="/admin/prompts/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
-        >
-          + Criar nova versão
-        </Link>
+        <div className="flex items-center gap-3">
+          <GameSelector games={games} current={gameId} />
+          <Link
+            href={`/admin/prompts/new?game=${gameId}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
+          >
+            + Criar nova versão
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
         {prompts.length === 0 ? (
           <div className="rounded-xl border border-border/40 bg-card/40 px-8 py-12 text-center">
             <p className="text-sm text-muted-foreground">
-              Nenhum prompt cadastrado ainda.{" "}
-              <Link href="/admin/prompts/new" className="text-primary hover:underline">
+              Nenhum prompt cadastrado ainda para <strong>{gameName}</strong>.{" "}
+              <Link href={`/admin/prompts/new?game=${gameId}`} className="text-primary hover:underline">
                 Criar primeira versão →
               </Link>
             </p>

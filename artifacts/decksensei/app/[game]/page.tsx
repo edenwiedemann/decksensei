@@ -124,7 +124,7 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
       </section>
 
       {/* Form section */}
-      <section className="mx-auto max-w-2xl px-6 pb-24">
+      <section className="mx-auto max-w-2xl px-6 pb-16">
         <div className="rounded-xl border border-border/60 bg-card/60 p-6 shadow-xl backdrop-blur-sm">
           <DeckInput
             placeholder={placeholder}
@@ -134,6 +134,17 @@ export default async function GamePage({ params, searchParams }: GamePageProps) 
           />
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/20 px-6 py-6 text-center">
+        <p className="text-xs text-muted-foreground/40">
+          Deck Sensei · feito com carinho em Recife
+          <span className="mx-2">·</span>
+          <a href="/sobre" className="hover:text-muted-foreground transition-colors">
+            Sobre
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

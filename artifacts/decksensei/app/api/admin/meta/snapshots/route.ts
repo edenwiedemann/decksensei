@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Body inválido." }, { status: 400 });
   }
 
-  const { gameId = "digimon", version, notes, copyFromId, scope = "global" } = body;
+  const { gameId, version, notes, copyFromId, scope = "global" } = body;
+
+  if (!gameId?.trim()) {
+    return Response.json({ error: "gameId é obrigatório" }, { status: 400 });
+  }
 
   if (!version?.trim()) {
     return Response.json({ error: "version é obrigatório." }, { status: 400 });

@@ -1,21 +1,28 @@
 "use client";
 
-interface Game {
-  id: string;
-  label: string;
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+
+interface Props {
+  games: Array<{ id: string; label: string }>;
+  current: string;
 }
 
-const GAMES: Game[] = [
-  { id: "digimon", label: "Digimon Card Game" },
-];
+export default function GameSelector({ games, current }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
 
-export default function GameSelector() {
   return (
     <select
-      defaultValue="digimon"
+      value={current}
+      onChange={(e) => {
+        const params = new URLSearchParams(sp.toString());
+        params.set("game", e.target.value);
+        router.push(`${pathname}?${params.toString()}`);
+      }}
       className="rounded-lg border border-border/60 bg-card/60 px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
     >
-      {GAMES.map((g) => (
+      {games.map((g) => (
         <option key={g.id} value={g.id}>
           {g.label}
         </option>

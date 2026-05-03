@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { pool } from "@workspace/db";
 import { requireAdminCookie } from "@/lib/auth/admin";
+import { getGames } from "@/lib/games/list";
+import GameSelector from "../_components/GameSelector";
 import CreateSnapshotButton from "./_components/CreateSnapshotButton";
 
 export const dynamic = "force-dynamic";
@@ -36,12 +39,20 @@ async function getSnapshots(gameId: string): Promise<SnapshotRow[]> {
   return r.rows;
 }
 
-export default async function MetaListPage() {
+export default async function MetaListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ game?: string }>;
+}) {
   await requireAdminCookie();
 
-  const gameId = "digimon";
+  const [sp, games] = await Promise.all([searchParams, getGames()]);
+  const gameId = sp.game ?? games[0]?.id;
+  if (!gameId) notFound();
+
   const snapshots = await getSnapshots(gameId);
   const activeSnap = snapshots.find((s) => s.active);
+  const gameName = games.find((g) => g.id === gameId)?.label ?? gameId;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,30%,5%)] via-[hsl(240,25%,7%)] to-[hsl(240,22%,9%)]">
@@ -51,19 +62,26 @@ export default async function MetaListPage() {
             ← Admin
           </Link>
           <span className="text-border/60">·</span>
-          <h1 className="text-base font-semibold text-foreground">Meta global — {gameId}</h1>
+          <h1 className="text-base font-semibold text-foreground">
+            Meta global — <span className="text-primary">{gameName}</span>
+          </h1>
         </div>
-        <CreateSnapshotButton
-          gameId={gameId}
-          activeSnapshotId={activeSnap?.id ?? null}
-          activeSnapshotVersion={activeSnap?.version ?? null}
-        />
+        <div className="flex items-center gap-3">
+          <GameSelector games={games} current={gameId} />
+          <CreateSnapshotButton
+            gameId={gameId}
+            activeSnapshotId={activeSnap?.id ?? null}
+            activeSnapshotVersion={activeSnap?.version ?? null}
+          />
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
         {snapshots.length === 0 ? (
           <div className="rounded-xl border border-border/40 bg-card/40 px-8 py-12 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma snapshot cadastrada ainda.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhuma snapshot cadastrada ainda para <strong>{gameName}</strong>.
+            </p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border/40 bg-card/40">

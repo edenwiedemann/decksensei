@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const { searchParams } = new URL(req.url);
-  const gameId = searchParams.get("gameId") ?? "digimon";
+  const gameId = searchParams.get("gameId");
+  if (!gameId) {
+    return Response.json({ error: "gameId é obrigatório" }, { status: 400 });
+  }
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "10", 10), 20);
 
   const rows = await pool.query<RecentAnalysis>(
