@@ -21,6 +21,7 @@ interface AnalysisRow {
   id: string;
   game_id: string;
   created_at: Date;
+  deck_name: string | null;
   deck_preview: string;
   response_time_ms: number | null;
   similar_archetype_id: string | null;
@@ -74,6 +75,7 @@ async function getAnalyses(f: Filters): Promise<AnalysisRow[]> {
       a.id,
       a.game_id,
       a.created_at,
+      a.deck_name,
       LEFT(a.deck_text, 60) AS deck_preview,
       a.response_time_ms,
       a.similar_archetype_id,
@@ -162,7 +164,7 @@ export default async function AdminAnalysesPage({ searchParams }: PageProps) {
             <thead>
               <tr className="border-b border-border/40 bg-muted/20">
                 {[
-                  "Data", "Jogo", "Usuário", "Deck (prévia)",
+                  "Data", "Jogo", "Usuário", "Nome", "Deck (prévia)",
                   "ms", "Tokens", "Custo USD", "Feedback", "Arquetipo", "",
                 ].map((h) => (
                   <th
@@ -205,8 +207,17 @@ export default async function AdminAnalysesPage({ searchParams }: PageProps) {
                         <span className="italic text-muted-foreground/40">anônimo</span>
                       )}
                     </td>
+                    <td className="max-w-[120px] truncate px-3 py-2.5 text-xs">
+                      {a.deck_name ? (
+                        <span className="font-medium text-foreground/80" title={a.deck_name}>
+                          {a.deck_name}
+                        </span>
+                      ) : (
+                        <span className="italic text-muted-foreground/30">—</span>
+                      )}
+                    </td>
                     <td
-                      className="max-w-[200px] truncate px-3 py-2.5 font-mono text-xs text-muted-foreground/70"
+                      className="max-w-[180px] truncate px-3 py-2.5 font-mono text-xs text-muted-foreground/70"
                       title={a.deck_preview}
                     >
                       {a.deck_preview}

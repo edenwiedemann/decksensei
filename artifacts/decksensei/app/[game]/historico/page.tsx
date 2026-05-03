@@ -67,6 +67,7 @@ export default async function HistoricoPage({ params }: PageParams) {
       .select({
         id: analysesTable.id,
         analysisText: analysesTable.analysisText,
+        deckName: analysesTable.deckName,
         createdAt: analysesTable.createdAt,
         similarArchetypeId: analysesTable.similarArchetypeId,
       })
@@ -146,8 +147,11 @@ export default async function HistoricoPage({ params }: PageParams) {
                           {a.similarArchetypeId}
                         </span>
                       )}
-                      <p className="text-sm leading-snug text-muted-foreground line-clamp-2">
-                        {excerpt(a.analysisText)}…
+                      <p className="text-sm font-medium leading-snug text-foreground">
+                        {a.deckName ?? "Deck sem nome"}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground/70 line-clamp-1">
+                        {excerpt(a.analysisText, 80)}…
                       </p>
                     </div>
                     <div className="shrink-0 text-right flex flex-col items-end gap-1.5">

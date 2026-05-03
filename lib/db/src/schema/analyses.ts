@@ -33,6 +33,7 @@ export const analysesTable = pgTable(
     metaSnapshotId: integer("meta_snapshot_id")
       .notNull()
       .references(() => metaSnapshotsTable.id),
+    deckName: varchar("deck_name", { length: 80 }),
     similarArchetypeId: varchar("similar_archetype_id", { length: 100 }),
     responseTimeMs: integer("response_time_ms"),
     isFeatured: boolean("is_featured").notNull().default(false),

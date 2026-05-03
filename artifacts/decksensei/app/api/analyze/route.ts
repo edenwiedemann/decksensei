@@ -206,6 +206,7 @@ export async function POST(request: NextRequest) {
   let deck: ParsedDeck;
   let enrichedCards: EnrichedCard[];
   let tournamentMode = false;
+  let deckName: string | null = null;
 
   try {
     const body = (await request.json()) as {
@@ -213,6 +214,7 @@ export async function POST(request: NextRequest) {
       deck?: unknown;
       enrichedCards?: unknown;
       tournamentMode?: unknown;
+      deckName?: unknown;
     };
 
     if (typeof body.gameId !== "string" || !body.gameId) {
@@ -228,6 +230,10 @@ export async function POST(request: NextRequest) {
       ? (body.enrichedCards as EnrichedCard[])
       : [];
     tournamentMode = body.tournamentMode === true;
+    deckName =
+      typeof body.deckName === "string" && body.deckName.trim()
+        ? body.deckName.trim().slice(0, 80)
+        : null;
   } catch {
     return Response.json({ error: "Body inválido" }, { status: 400 });
   }
@@ -387,6 +393,7 @@ export async function POST(request: NextRequest) {
             metaSnapshotId: built.metaSnapshotId,
             similarArchetypeId,
             responseTimeMs,
+            deckName,
           });
         } catch (dbErr) {
           console.error("[analyze] falha ao salvar análise no DB:", dbErr);

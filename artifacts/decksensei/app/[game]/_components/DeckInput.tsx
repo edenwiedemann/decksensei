@@ -95,6 +95,7 @@ export default function DeckInput({
   const [tournamentMode, setTournamentMode] = useState(false);
   const [usageCount, setUsageCount] = useState<{ used: number; limit: number; isAuthenticated: boolean } | null>(null);
   const [canPaste, setCanPaste] = useState(false);
+  const [deckName, setDeckName] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
   const analysisAreaRef = useRef<HTMLDivElement>(null);
@@ -345,7 +346,7 @@ export default function DeckInput({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: abort.signal,
-          body: JSON.stringify({ gameId: gameConfig.id, deck: parsed, enrichedCards, tournamentMode }),
+          body: JSON.stringify({ gameId: gameConfig.id, deck: parsed, enrichedCards, tournamentMode, deckName: deckName.trim() || null }),
         });
       } catch (fetchErr) {
         if ((fetchErr as { name?: string }).name === "AbortError") return;
@@ -461,6 +462,21 @@ export default function DeckInput({
           >
             ↓ Colar da área de transferência
           </button>
+        </div>
+      )}
+
+      {/* Nome do deck (opcional) */}
+      {(phase === "idle" || phase === "error") && (
+        <div className="flex flex-col gap-1">
+          <input
+            type="text"
+            value={deckName}
+            onChange={(e) => setDeckName(e.target.value)}
+            maxLength={60}
+            placeholder="Nome do deck (opcional) — ex: Agumon OTK, Blue Hybrid…"
+            className="w-full rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
+            aria-label="Nome do deck"
+          />
         </div>
       )}
 
